@@ -11,7 +11,7 @@ CC_TTS_CONF="${CC_TTS_CONF:-$HOME/.claude/hooks/tts.conf}"
 [ -f "$CC_TTS_CONF" ] && . "$CC_TTS_CONF"
 
 CC_TTS_ENGINE="${CC_TTS_ENGINE:-spd}"
-CC_TTS_MAXCHARS="${CC_TTS_MAXCHARS:-1200}"
+CC_TTS_MAXCHARS="${CC_TTS_MAXCHARS:-4000}"   # fallback path only; <voice> is never trimmed
 CC_TTS_RATE_SPD="${CC_TTS_RATE_SPD:-30}"              # -100..100
 CC_TTS_VOICE_EDGE="${CC_TTS_VOICE_EDGE:-en-US-AriaNeural}"
 CC_TTS_RATE_EDGE="${CC_TTS_RATE_EDGE:-+15%}"
@@ -83,6 +83,12 @@ tts_voice() {
 # Trim to CC_TTS_MAXCHARS at a sentence boundary so speech never stops
 # mid-word. Falls back to a word boundary if there is no sentence end in
 # range. CC_TTS_MAXCHARS=0 means no limit.
+#
+# This applies ONLY to the fallback path that speaks a whole reply. A <voice>
+# block is written to be heard and must never be trimmed: silently dropping
+# two thirds of a long one is worse than taking longer to say it. edge-tts
+# handles several thousand characters in a single request, and streaming means
+# playback still starts in about a second regardless of length.
 tts_fit() {
   awk -v max="$CC_TTS_MAXCHARS" '{
     if (max <= 0 || length($0) <= max) { print; exit }
@@ -338,12 +344,19 @@ tts_speak() {
 
 # Given a full assistant message on stdin, return the text to speak.
 tts_resolve() {
-  local raw voice
+  local raw voice out full
   raw=$(cat)
   voice=$(printf '%s\n' "$raw" | tts_voice)
   if [ -n "${voice//[[:space:]]/}" ]; then
-    printf '%s\n' "$voice" | tts_clean
-  else
-    printf '%s\n' "$raw" | tts_clean
+    # Authored for the ear: say all of it.
+    CC_TTS_MAXCHARS=0 tts_clean <<< "$voice"
+    return 0
   fi
+  # No <voice> block: this is the whole reply, which can be enormous. Cap it,
+  # but say so rather than stopping mid-thought as though that were the end.
+  full=$(CC_TTS_MAXCHARS=0 tts_clean <<< "$raw")
+  out=$(printf '%s' "$full" | tts_clean)
+  printf '%s' "$out"
+  [ "${#out}" -lt "${#full}" ] && printf ' … message truncated.'
+  printf '\n'
 }

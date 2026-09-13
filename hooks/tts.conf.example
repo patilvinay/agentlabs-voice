@@ -8,8 +8,11 @@
 #        text is sent to Microsoft; auto-falls back to spd on failure)
 CC_TTS_ENGINE="${CC_TTS_ENGINE:-edge}"
 
-# 0 = no limit. Trimmed at a sentence boundary, never mid-word.
-CC_TTS_MAXCHARS="${CC_TTS_MAXCHARS:-1200}"
+# Cap for the FALLBACK path only — a reply with no <voice> block, which can be
+# enormous. A <voice> block is authored to be heard and is never trimmed.
+# When the cap does bite, "… message truncated" is spoken so you know.
+# 0 = no limit at all.
+CC_TTS_MAXCHARS="${CC_TTS_MAXCHARS:-4000}"
 
 # spd engine
 CC_TTS_RATE_SPD="${CC_TTS_RATE_SPD:-30}"          # -100..100
