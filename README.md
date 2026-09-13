@@ -19,8 +19,13 @@ Nothing speaks or records unless you press a key.
 git clone https://github.com/patilvinay/agentlabs-voice && cd agentlabs-voice && ./install.sh
 ```
 
-Then restart your agent so it picks up the hooks. The installer is idempotent —
-re-run it after every pull.
+Then restart your agent so it picks up the hooks, and **run it**:
+
+```bash
+tmux            # then press  prefix v  after any reply
+```
+
+The installer is idempotent — re-run it after every pull.
 
 It installs the system packages, a Python venv at `~/.venvs/tts`, the hooks,
 the commands, the tmux bindings and one skill. Flags: `--no-sudo` (report
@@ -101,6 +106,13 @@ is where that would go.
 ```
 
 Hooks are matched by path, so anything you added yourself is left alone.
+
+## Companion
+
+[agentlabs-ideas-skill](https://github.com/patilvinay/agentlabs-ideas-skill) —
+a per-session scratchpad and a browser view of your session's markdown and
+source. Independent; installing both is supported and they share one
+`lib/agent.sh`.
 
 ## Licence
 
