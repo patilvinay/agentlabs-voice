@@ -1,0 +1,5 @@
+# the live config holds your API key — never commit it
+hooks/tts.conf
+*.mp3
+*.wav
+*.pcm

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Print (creating if needed) the workspace directory for a pane's agent session.
+#
+#   session-dir [PANE_ID]
+#
+# TMUX_PANE is EMPTY inside tmux run-shell bindings and display-popup, so the
+# pane is passed in by whatever binding calls this.
+#
+# Resolution order, most trustworthy first:
+#   1. panes in this window currently running an agent, newest mapping first
+#   2. any other pane in this window, newest mapping first
+#   3. the calling pane itself
+#   4. the newest transcript this agent knows about
+# Panes keep their mapping after the agent moves elsewhere, so a stale entry can
+# otherwise outlive the session it named.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for c in "$HERE/../lib/agent.sh" "$HOME/.local/lib/agentlabs/agent.sh"; do
+  [ -f "$c" ] && { . "$c"; break; }
+done
+command -v agent_pane_transcript >/dev/null || { echo "session-dir: lib/agent.sh not found" >&2; exit 1; }
+
+root="${AGENTLABS_SESSIONS:-$HOME/.claude/scratch}"   # NOT ~/.claude/sessions: Claude Code owns that
+pane="${1:-${TMUX_PANE:-}}"
+sid=""
+
+candidates() {
+  local win
+  win=$(tmux display -p -t "$pane" '#{session_name}:#{window_index}' 2>/dev/null) || return 0
+  local agents='claude|codex'
+  tmux list-panes -t "$win" -F '#{pane_current_command} #{pane_id}' 2>/dev/null \
+    | awk -v a="$agents" '$1 ~ a {print $2}' \
+    | while read -r p; do f="$AGENTLABS_RUN/pane-${p#%}.transcript"
+        [ -f "$f" ] && printf '%s\t%s\n' "$(stat -c %Y "$f")" "$p"; done | sort -rn | cut -f2
+  tmux list-panes -t "$win" -F '#{pane_current_command} #{pane_id}' 2>/dev/null \
+    | awk -v a="$agents" '$1 !~ a {print $2}' \
+    | while read -r p; do f="$AGENTLABS_RUN/pane-${p#%}.transcript"
+        [ -f "$f" ] && printf '%s\t%s\n' "$(stat -c %Y "$f")" "$p"; done | sort -rn | cut -f2
+}
+
+if [ -n "$pane" ]; then
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    t=$(agent_pane_transcript "$p" 2>/dev/null) || continue
+    sid=$(agent_session_id "$t"); [ -n "$sid" ] && break
+  done < <(candidates)
+fi
+if [ -z "$sid" ] && [ -n "$pane" ]; then
+  t=$(agent_pane_transcript "$pane" 2>/dev/null) && sid=$(agent_session_id "$t")
+fi
+if [ -z "$sid" ]; then
+  t=$(agent_newest_transcript "$PWD" 2>/dev/null) && sid=$(agent_session_id "$t")
+fi
+[ -n "$sid" ] || { echo "session-dir: no agent session found for this pane" >&2; exit 1; }
+
+d="$root/$sid"
+mkdir -p "$d/00-scratch" "$d/10-review" "$d/20-approved"
+printf '%s\n' "$d"

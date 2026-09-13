@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Is what is deployed still what is in the repo? Run it before trusting that a
+# change was committed — this project installs into ~/.claude/hooks and
+# ~/.local/bin, so editing a deployed copy directly is easy and invisible.
+#
+#   sync-check          report drift
+#   sync-check --pull   copy deployed files back over the repo (then commit)
+set -uo pipefail
+# Cannot be derived from this script's own path: it is installed to
+# ~/.local/bin, whose parent is not the checkout.
+# Recorded by install.sh, because this script is installed to ~/.local/bin and
+# the checkout can live anywhere. Falls back to a guess only as a last resort.
+STAMP="$HOME/.config/claude-voice/repo"
+REPO="${CLAUDE_VOICE_REPO:-}"
+[ -z "$REPO" ] && [ -f "$STAMP" ] && REPO="$(cat "$STAMP")"
+[ -z "$REPO" ] && REPO="$HOME/workspace/claude-voice"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+[ -d "$here/.git" ] && [ -d "$here/hooks" ] && REPO="$here"
+[ -d "$REPO/hooks" ] || { echo "sync-check: no checkout at $REPO" >&2; exit 1; }
+HOOKS="$HOME/.claude/hooks"; BIN="$HOME/.local/bin"
+# third-party binaries and Claude Code's own symlink are not ours to track
+SKIP='^(claude|glow|cmux|cmux-flicker-test|flicker-scope)$'
+pull=0; [ "${1:-}" = "--pull" ] && pull=1
+drift=0
+
+check() {                       # check <deployed> <repo-relative>
+  local d="$1" r="$REPO/$2" dt rt
+  if [ ! -f "$r" ]; then
+    printf '  %-26s not in repo\n' "$(basename "$d")"; drift=1
+    [ "$pull" = 1 ] && install -m 0755 "$d" "$r" && printf '    <- pulled\n'
+    return
+  fi
+  cmp -s "$d" "$r" && return
+  # Say WHICH side is newer. Without it, --pull can overwrite repo edits that
+  # simply have not been deployed yet -- the common case right after editing,
+  # and the opposite of what you want.
+  dt=$(stat -c %Y "$d"); rt=$(stat -c %Y "$r")
+  drift=1
+  if [ "$rt" -gt "$dt" ]; then
+    printf '  %-26s repo is NEWER -> run ./install.sh\n' "$(basename "$d")"
+    [ "$pull" = 1 ] && printf '    refusing to pull: would discard the repo copy\n'
+  else
+    printf '  %-26s deployed is newer -> sync-check --pull\n' "$(basename "$d")"
+    [ "$pull" = 1 ] && install -m 0755 "$d" "$r" && printf '    <- pulled\n'
+  fi
+}
+
+for f in "$HOOKS"/*.sh "$HOOKS"/*.py; do [ -f "$f" ] && check "$f" "hooks/$(basename "$f")"; done
+for f in "$BIN"/*; do
+  b=$(basename "$f"); [[ "$b" =~ $SKIP ]] && continue
+  [ -f "$f" ] && check "$f" "bin/$b"
+done
+
+if [ "$drift" = 0 ]; then echo "  in sync"; else
+  [ "$pull" = 0 ] && echo && echo "  run: sync-check --pull   then commit"
+fi
+cd "$REPO"
+n=$(git status --porcelain | wc -l)
+[ "$n" -gt 0 ] && echo "  $n uncommitted file(s) in the repo"
+git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 && {
+  a=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
+  [ "$a" -gt 0 ] && echo "  $a commit(s) not pushed"
+}
+exit 0

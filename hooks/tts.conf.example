@@ -1,0 +1,50 @@
+# Claude Code TTS settings. Sourced by speak.sh.
+# Each line uses ${VAR:-...} so an environment variable set by the caller wins
+# over the value here; a plain VAR=value would clobber it instead.
+
+# off  = silent (hooks still run, say nothing)
+# spd  = offline espeak-ng via speech-dispatcher (instant, robotic)
+# edge = online Microsoft Edge neural voices (natural, ~1.15s latency,
+#        text is sent to Microsoft; auto-falls back to spd on failure)
+CC_TTS_ENGINE="${CC_TTS_ENGINE:-edge}"
+
+# 0 = no limit. Trimmed at a sentence boundary, never mid-word.
+CC_TTS_MAXCHARS="${CC_TTS_MAXCHARS:-1200}"
+
+# spd engine
+CC_TTS_RATE_SPD="${CC_TTS_RATE_SPD:-30}"          # -100..100
+
+# edge engine — list voices: ~/.venvs/tts/bin/edge-tts --list-voices | grep en-
+CC_TTS_VOICE_EDGE="${CC_TTS_VOICE_EDGE:-en-US-AvaMultilingualNeural}"
+CC_TTS_RATE_EDGE="${CC_TTS_RATE_EDGE:-+15%}"
+
+# 1 = speak automatically at the end of every turn
+# 0 = manual only: nothing is spoken until you press prefix v (or run /speak)
+CC_TTS_AUTO="${CC_TTS_AUTO:-0}"
+
+# 1 = stream synthesis into the player (speech starts ~0.2s, needs mpg123)
+# 0 = wait for the complete mp3 first (needed only if mpg123 is unavailable)
+CC_TTS_STREAM="${CC_TTS_STREAM:-1}"
+
+# Speech-to-text model: tiny.en | base.en | small.en | medium.en
+CC_STT_MODEL="${CC_STT_MODEL:-base.en}"
+
+# Online streaming STT (live transcription). Get a key at console.deepgram.com
+# and paste it here, then prefix Space gives word-by-word live text.
+DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-}"
+CC_STT_ONLINE_MODEL="${CC_STT_ONLINE_MODEL:-nova-3}"
+
+# 1 = at the end of each turn, open a pane showing the summary:
+#     space narrates it, esc dismisses. Needs CC_TTS_AUTO=0.
+CC_TTS_OFFER="${CC_TTS_OFFER:-1}"
+CC_TTS_OFFER_TIMEOUT="${CC_TTS_OFFER_TIMEOUT:-90}"
+
+# 1 = the Stop hook speaks only when the pane it belongs to is on screen (its
+#     tmux window selected and a client attached). Lets several sessions run
+#     without talking over each other. prefix+v always speaks regardless.
+CC_TTS_ONLY_ACTIVE="${CC_TTS_ONLY_ACTIVE:-1}"
+
+# Per-session voice is NOT set here — pick it with prefix+y and it is stored in
+# ~/.claude/scratch/<session-id>/.voice, so each session keeps its own and it
+# survives reboots. This value is the fallback for sessions that have not
+# chosen one.

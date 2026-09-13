@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Pick the speaking voice for THIS session. tmux prefix + y.
+#
+# The choice is written to the session's scratchpad as .voice, so it survives
+# reboots and stays with the session rather than the machine. Other sessions
+# keep their own, which is the point: several Claude sessions can run at once
+# and each sounds different.
+#
+#   voice-picker [PANE_ID]
+#
+# The pane must be passed in: inside a tmux popup TMUX_PANE is EMPTY, so a
+# picker that looked at its own environment found no session and exited
+# instantly. session-dir also copes with the calling pane being the shell
+# beside Claude rather than Claude itself.
+#
+#   number   preview that voice
+#   s        save the last previewed voice for this session
+#   d        clear it — go back to the configured default
+#   q        quit
+#
+# The voice list is cached: edge-tts --list-voices is a network call and there
+# are 324 of them.
+. "$HOME/.claude/hooks/speak.sh"
+
+CACHE="$cc_tts_run/voices.tsv"
+FILTER="${CC_VOICE_FILTER:-^en-}"
+SAMPLE="${CC_VOICE_SAMPLE:-This is how I will read your replies in this session.}"
+
+pane="${1:-${TMUX_PANE:-}}"
+dir=$(session-dir "$pane" 2>/dev/null) || {
+  printf 'No Claude session found for this pane.\n'
+  printf 'Press a key to close.\n'; read -rsn1; exit 1; }
+sid=$(basename "$dir"); mkdir -p "$dir"
+vfile="$dir/.voice"
+title=$(session-title "$sid" 2>/dev/null || echo "$sid")
+
+if [ ! -s "$CACHE" ] || [ -n "$(find "$CACHE" -mtime +7 2>/dev/null)" ]; then
+  printf 'fetching voice list…\n'
+  "$CC_TTS_VENV/bin/edge-tts" --list-voices 2>/dev/null \
+    | awk 'NR>2 && NF{printf "%s\t%s\t%s\n",$1,$2,substr($0,index($0,$4))}' > "$CACHE"
+fi
+
+mapfile -t rows < <(grep -E "$FILTER" "$CACHE")
+if [ "${#rows[@]}" -eq 0 ]; then
+  printf 'No voices matched %s.\n' "$FILTER"
+  printf 'Is %s/bin/edge-tts installed, and is the network up?\n' "$CC_TTS_VENV"
+  printf 'Press a key to close.\n'; read -rsn1; exit 1
+fi
+
+show() {
+  local cur; cur=$(cat "$vfile" 2>/dev/null)
+  printf '\033[1m Voice for: %s\033[0m\n' "$title"
+  printf ' current: \033[36m%s\033[0m\n\n' "${cur:-(default: $CC_TTS_VOICE_EDGE)}"
+  local i=0
+  for r in "${rows[@]}"; do
+    i=$((i+1))
+    IFS=$'\t' read -r name gender pers <<< "$r"
+    printf ' %2d. %-34s %-7s \033[2m%s\033[0m\n' "$i" "$name" "$gender" "${pers:0:44}"
+  done
+  printf '\n \033[2mnumber = preview · s = save · d = default · q = quit\033[0m\n'
+}
+
+last=""
+show
+while true; do
+  printf '\n> '; read -r ans || break
+  case "$ans" in
+    q|Q|"") break ;;
+    s|S) [ -n "$last" ] && { printf '%s' "$last" > "$vfile"; printf ' saved: %s\n' "$last"; break; }
+         printf ' preview one first\n' ;;
+    d|D) rm -f "$vfile"; printf ' cleared — using the default\n'; break ;;
+    ''|*[!0-9]*) printf ' ?\n' ;;
+    *) if [ "$ans" -ge 1 ] && [ "$ans" -le "${#rows[@]}" ]; then
+         IFS=$'\t' read -r name _ _ <<< "${rows[$((ans-1))]}"
+         last="$name"; printf ' ♪ %s\n' "$name"
+         CC_TTS_VOICE_EDGE="$name" tts_speak "$SAMPLE"
+       else printf ' out of range\n'; fi ;;
+  esac
+done

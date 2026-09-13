@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Frame voice-picker in a floating pane. tmux prefix + y.
+pane="${1:-${TMUX_PANE:-}}"
+tmux display-popup -E -w 78% -h 82% -T " voice for this session · q closes " \
+  "bash -lc '~/.local/bin/voice-picker \"$pane\"'"

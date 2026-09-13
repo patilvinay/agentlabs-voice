@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Display name for a session: the title you set in the agent, else a short id.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for c in "$HERE/../lib/agent.sh" "$HOME/.local/lib/agentlabs/agent.sh"; do
+  [ -f "$c" ] && { . "$c"; break; }
+done
+sid="${1:-}"
+[ -n "$sid" ] || sid=$(basename "$(session-dir 2>/dev/null)")
+agent_session_title "$sid"
