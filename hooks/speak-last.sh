@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code Stop hook: speak the last assistant message aloud.
+# Stop hook: speak the agent's last message aloud.
 #
 # Two races to defend against, both of which made older text get spoken:
 #   1. The hook can fire before the final assistant message is flushed to the
