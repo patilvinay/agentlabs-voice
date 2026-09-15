@@ -1,0 +1,46 @@
+# Keyterms for live dictation (Deepgram nova-3).
+#
+# Up to 100 plain terms, one per line; # comments and blank lines ignored.
+# These are boosted during recognition, which is what stops proper nouns and
+# jargon being guessed at phonetically -- "cloud code" for "Claude Code",
+# "frog mouth" for "frogmouth". No weights, no wildcards: plain terms only.
+#
+# Copied to ~/.claude/hooks/keyterms.txt on install and never overwritten
+# afterwards, so add your own freely. Override the path with
+# CC_STT_KEYTERM_FILE.
+
+# --- the agents ---
+Claude
+Claude Code
+Codex
+
+# --- this project ---
+agentlabs
+tmux
+prefix
+dictation
+transcription
+
+# --- terminal / tooling vocabulary that gets mangled ---
+sixel
+chafa
+frogmouth
+mermaid
+markdown
+repo
+commit
+push
+gitignore
+stdout
+stderr
+venv
+apt
+snap
+systemd
+PipeWire
+ALSA
+Deepgram
+whisper
+edge-tts
+
+# --- add your own below: names, products, services you say often ---

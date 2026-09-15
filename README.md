@@ -43,6 +43,37 @@ no network, nothing leaves the machine.
 **Live dictation** (`prefix Space`) is the one thing that needs a key — see
 below.
 
+## Making dictation more accurate
+
+Two settings matter far more than the model choice, and both live in
+`~/.claude/hooks/tts.conf`:
+
+**Say which English you speak.** The default asks for generic `en`; a US
+default is the wrong dialect for most of the world. nova-3 accepts `en`,
+`en-US`, `en-GB`, `en-IN`, `en-AU`, `en-NZ`, and `multi` for mixed-language
+speech.
+
+```bash
+CC_STT_LANG="en-IN"        # or en-GB, en-AU, ...
+```
+
+**Boost the words you actually say.** nova-3 takes up to 100 keyterms, and this
+is the single biggest improvement for technical speech. Edit
+`~/.claude/hooks/keyterms.txt` — one term per line. Measured on the same clip:
+
+| keyterms | transcript |
+|----------|------------|
+| off | *"Open **frog mouth** in TMUX and check the **six cell** output"* |
+| on | *"Open **frogmouth** in **tmux** and check the **sixel** output"* |
+
+The file ships with the agents' names and common terminal vocabulary; add your
+own product names, colleagues' names, and anything you repeat.
+
+**Offline dictation** (`prefix m`) has its own dial, `CC_STT_MODEL`. Bigger is
+slower and more accurate; the plain variants (`small`, `medium`) are
+multilingual and often handle a non-US accent better than the American-only
+`.en` builds.
+
 ## Third-party services
 
 Two, both optional, both off unless you use the feature:

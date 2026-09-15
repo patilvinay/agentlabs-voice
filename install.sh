@@ -68,6 +68,10 @@ case ":$PATH:" in
      warn "  export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
 esac
 
+if [ -f "$HOOKS/keyterms.txt" ]; then ok "keyterms.txt kept (yours already exists)"
+else install -m 0644 "$REPO/hooks/keyterms.example.txt" "$HOOKS/keyterms.txt"
+     ok "keyterms.txt created — add names and jargon you say often"; fi
+
 if [ -f "$HOOKS/tts.conf" ]; then ok "tts.conf kept (yours already exists)"
 else install -m 0600 "$REPO/hooks/tts.conf.example" "$HOOKS/tts.conf"
      ok "tts.conf created — add a Deepgram key to enable live dictation"; fi

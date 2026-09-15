@@ -11,14 +11,62 @@ import json
 import os
 import sys
 
+import urllib.parse
+
 import websockets
 
-URL = (
+BASE = (
     "wss://api.deepgram.com/v1/listen"
-    "?model={model}&language={lang}"
-    "&punctuate=true&smart_format=true&interim_results=true"
+    "?punctuate=true&smart_format=true&interim_results=true"
     "&encoding=linear16&sample_rate=16000&channels=1"
 )
+
+
+def build_url(model: str, lang: str, keyterms: list[str]) -> str:
+    """Compose the listen URL.
+
+    Two things matter more than the model choice:
+
+    language — asking for the wrong dialect costs accuracy. nova-3 accepts
+    en, en-US, en-AU, en-GB, en-IN, en-NZ; "en" is the safe generic. Set
+    CC_STT_LANG to your own dialect (en-IN for Indian English) rather than
+    leaving a US default in place.
+
+    keyterm — nova-3 boosts up to 100 supplied terms, which is what stops
+    proper nouns and jargon being guessed at phonetically ("cloud code" for
+    "Claude Code"). Repeatable parameter, plain terms only, no weights, and
+    capped at 500 tokens per request.
+    """
+    url = BASE + f"&model={urllib.parse.quote(model)}&language={urllib.parse.quote(lang)}"
+    for t in keyterms:
+        t = t.strip()
+        if t:
+            url += "&keyterm=" + urllib.parse.quote(t)
+    return url
+
+
+def load_keyterms() -> list[str]:
+    """Keyterms from CC_STT_KEYTERMS (comma separated) plus an optional file.
+
+    A file is easier to live with than an ever-growing environment variable:
+    one term per line, blank lines and # comments ignored.
+    """
+    terms: list[str] = []
+    env = os.environ.get("CC_STT_KEYTERMS", "")
+    terms += [t for t in env.split(",") if t.strip()]
+    path = os.environ.get("CC_STT_KEYTERM_FILE",
+                          os.path.expanduser("~/.claude/hooks/keyterms.txt"))
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    terms.append(line)
+    except OSError:
+        pass
+    # Deepgram caps keyterms per request; keep the first 100 and let the rest go
+    # rather than having the whole connection rejected.
+    return terms[:100]
 
 
 async def run(args, key: str) -> int:
@@ -40,7 +88,7 @@ async def run(args, key: str) -> int:
         write(args.live, " ".join(finals))
         write(args.live + ".partial", interim)
 
-    url = URL.format(model=args.model, lang=args.language)
+    url = build_url(args.model, args.language, load_keyterms())
     headers = {"Authorization": f"Token {key}"}
     try:
         ws = await websockets.connect(url, additional_headers=headers)
@@ -89,7 +137,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", required=True, help="file to rewrite with the running transcript")
     ap.add_argument("--model", default=os.environ.get("CC_STT_ONLINE_MODEL", "nova-3"))
-    ap.add_argument("--language", default=os.environ.get("CC_STT_LANG", "en-US"))
+    ap.add_argument("--language", default=os.environ.get("CC_STT_LANG", "en"))
     args = ap.parse_args()
 
     key = os.environ.get("DEEPGRAM_API_KEY") or os.environ.get("CC_STT_KEY") or ""

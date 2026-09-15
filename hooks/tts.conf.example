@@ -30,12 +30,32 @@ CC_TTS_AUTO="${CC_TTS_AUTO:-0}"
 CC_TTS_STREAM="${CC_TTS_STREAM:-1}"
 
 # Speech-to-text model: tiny.en | base.en | small.en | medium.en
+# Offline whisper model. Bigger is more accurate and slower; the plain
+# (multilingual) variants often handle a non-US accent better than the .en
+# ones, which are trained on American English only.
+#   tiny.en  base.en  small.en  medium.en      us-accent, fastest -> slowest
+#   tiny     base     small     medium         multilingual, better on accents
 CC_STT_MODEL="${CC_STT_MODEL:-base.en}"
 
 # Online streaming STT (live transcription). Get a key at console.deepgram.com
 # and paste it here, then prefix Space gives word-by-word live text.
 DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-}"
 CC_STT_ONLINE_MODEL="${CC_STT_ONLINE_MODEL:-nova-3}"
+
+# Dialect. Asking for the wrong one costs real accuracy, and a US default is
+# the wrong one for most of the world. nova-3 accepts:
+#   en        generic English, safe default
+#   en-IN     Indian English      en-GB  British      en-AU  Australian
+#   en-US     American            en-NZ  New Zealand
+#   multi     multilingual (also Hindi, Spanish, French, German, ...)
+CC_STT_LANG="${CC_STT_LANG:-en}"
+
+# Keyterm prompting (nova-3): up to 100 boosted terms. This is the single
+# biggest win for technical speech -- without it "frogmouth" becomes "frog
+# mouth" and "sixel" becomes "six cell". Edit ~/.claude/hooks/keyterms.txt,
+# one term per line. CC_STT_KEYTERMS adds a few inline, comma separated.
+CC_STT_KEYTERM_FILE="${CC_STT_KEYTERM_FILE:-$HOME/.claude/hooks/keyterms.txt}"
+CC_STT_KEYTERMS="${CC_STT_KEYTERMS:-}"
 
 # 1 = at the end of each turn, open a pane showing the summary:
 #     space narrates it, esc dismisses. Needs CC_TTS_AUTO=0.
