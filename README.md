@@ -78,6 +78,10 @@ three minutes. It is worth skipping when auto-speak is off, though -- the pane
 would pop and take focus the moment you finished typing, and you are looking
 at the screen anyway.
 
+With auto-speak on the closing beat stops being optional: without a `<voice>`
+block the hook reads the whole reply aloud, lists and all, and there is no
+pane to glance at and dismiss.
+
 Three a turn is a ceiling; most turns want one. The wording this repo uses is
 in `skills/agentlabs-voice/SKILL.md`, ready to paste into a `CLAUDE.md` or
 `AGENTS.md`.

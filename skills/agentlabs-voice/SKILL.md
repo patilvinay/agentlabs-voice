@@ -58,6 +58,11 @@ Only when it actually changed; there is nothing to say most of the time.
 **Closing — the outcome.** The `<voice>` block at the end of the reply, as
 always.
 
+**With auto-speak on, the closing beat is not optional.** Without a `<voice>`
+block the hook falls back to reading the whole reply -- lists, tables and all
+-- straight into their ears, with no pane to glance at and dismiss. Skipping
+it is only safe for a genuine one-liner.
+
 Three a turn is the ceiling and most turns want one. Do not narrate progress
 for its own sake — "reading the config now", "running the tests", "that
 worked". Narrating every step is how this ends up switched off.
