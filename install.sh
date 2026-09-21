@@ -57,6 +57,7 @@ ok "${PY_PKGS[*]}"
 say "Installing to $HOOKS, $BINDIR and $LIBDIR"
 mkdir -p "$HOOKS" "$BINDIR" "$LIBDIR" "$HOME/.config/agentlabs"
 install -m 0644 "$REPO"/lib/agent.sh "$LIBDIR"/agent.sh
+install -m 0644 "$REPO"/lib/transcript.py "$LIBDIR"/transcript.py
 install -m 0755 "$REPO"/hooks/*.sh "$HOOKS"/
 install -m 0755 "$REPO"/hooks/*.py "$HOOKS"/
 install -m 0755 "$REPO"/bin/*      "$BINDIR"/
@@ -102,6 +103,22 @@ if command -v jq >/dev/null 2>&1; then
   ok "Stop and Notification hooks registered"
 else
   warn "jq not found — register the hooks yourself, see the README"
+fi
+
+# Codex uses the same Stop handler. Review new/changed hooks with /hooks.
+if command -v jq >/dev/null 2>&1; then
+  codex_hooks="${CODEX_HOME:-$HOME/.codex}/hooks.json"
+  mkdir -p "$(dirname "$codex_hooks")"
+  [ -f "$codex_hooks" ] || printf '{}\n' > "$codex_hooks"
+  cp "$codex_hooks" "$codex_hooks.bak.$(date +%Y%m%d%H%M%S)"
+  tmp=$(mktemp)
+  jq --arg stop "$HOOKS/speak-last.sh" '
+    .hooks = (.hooks // {})
+    | .hooks.Stop = ((.hooks.Stop // []) | map(
+        .hooks |= map(select(.command != $stop))) | map(select(.hooks | length > 0)))
+      + [{hooks:[{type:"command",command:$stop,async:true,timeout:60}]}]
+  ' "$codex_hooks" > "$tmp" && mv "$tmp" "$codex_hooks"
+  ok "Codex Stop hook registered — review and trust it with /hooks"
 fi
 
 # ------------------------------------------------------------------------ tmux

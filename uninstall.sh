@@ -18,6 +18,15 @@ if [ -f "$SETTINGS" ] && command -v jq >/dev/null; then
       | .hooks.Notification=((.hooks.Notification//[])|strip)
       | .hooks |= with_entries(select(.value|length>0)) else . end' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
 fi
+codex_hooks="${CODEX_HOME:-$HOME/.codex}/hooks.json"
+if [ -f "$codex_hooks" ] && command -v jq >/dev/null; then
+  cp "$codex_hooks" "$codex_hooks.bak.$(date +%Y%m%d%H%M%S)"
+  tmp=$(mktemp)
+  jq --arg stop "$HOOKS/speak-last.sh" '
+    if .hooks.Stop then .hooks.Stop |= (map(.hooks |= map(select(.command != $stop)))
+      | map(select(.hooks | length > 0))) else . end
+  ' "$codex_hooks" > "$tmp" && mv "$tmp" "$codex_hooks"
+fi
 for f in "$REPO"/hooks/*.sh "$REPO"/hooks/*.py; do rm -f "$HOOKS/$(basename "$f")"; done
 for f in "$REPO"/bin/*; do rm -f "$BINDIR/$(basename "$f")"; done
 for d in "$REPO"/skills/*/; do [ -d "$d" ] && rm -rf "$SKILLS/$(basename "$d")"; done

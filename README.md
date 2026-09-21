@@ -107,11 +107,22 @@ with an empty key, is in the repo.
 | agent | status |
 |-------|--------|
 | **Claude Code** | implemented and tested |
-| **Codex CLI** | adapter included, **not yet verified** — no Codex on the machine this was built on |
+| **Codex CLI** | pane-specific playback and final-answer parsing; verified locally with CLI 0.154.0 |
 
-Everything agent-specific lives in `lib/agent.sh`: where transcripts are kept
-and how a session is named. Nothing else in the project names an agent, so
-adding or fixing one is a single file.
+Agent lookup lives in `lib/agent.sh`; `lib/transcript.py` reads Claude and
+Codex transcripts. In tmux, playback and voice selection resolve the requested
+pane only. Codex is detected from its live process and open rollout file, so
+manual playback works in an already-running session without restarting it.
+An unresolved pane reports an error instead of reading a different session.
+
+The installer also registers a Codex Stop hook. Review and trust it using
+`/hooks` in Codex (restart Codex if the new hook is not listed). This enables
+the configured end-of-turn offer/automatic playback; manual `prefix v` does
+not depend on hook trust. Ask Codex to end substantive replies with a plain
+`<voice>spoken summary</voice>` block. `prefix y` selects the voice for the
+same session that `prefix v` reads.
+
+Run the session-isolation tests with `python3 -m unittest discover -s tests -v`.
 
 ## Voices
 

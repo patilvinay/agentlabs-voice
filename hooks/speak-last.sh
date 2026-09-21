@@ -10,6 +10,8 @@
 # one we have not already spoken (tracked by uuid).
 
 . "$(dirname "$0")/speak.sh"
+# Codex Stop requires JSON output; Claude also accepts this empty result.
+trap 'printf "{}\n"' EXIT
 
 CC_TTS_SETTLE="${CC_TTS_SETTLE:-5}"       # max seconds to wait for the flush
 log="$cc_tts_run/debug.log"
@@ -27,16 +29,13 @@ agent_remember_pane "${TMUX_PANE:-}" "$t"
 
 [ -n "$t" ] && [ -f "$t" ] || exit 0
 
-state="$cc_tts_run/last-spoken.uuid"
+sid=$(agent_session_id "$t")
+state="$cc_tts_run/last-spoken-$sid.uuid"
 prev=$(cat "$state" 2>/dev/null)
 
-# Newest assistant entry that carries text, as "uuid<TAB>text".
+# Newest completed assistant message, as JSON {id,text}.
 newest() {
-  jq -rs '[.[]
-           | select(.type=="assistant")
-           | select(any(.message.content[]?; .type=="text" and (.text|length)>0))]
-          | last
-          | "\(.uuid // "no-uuid")\t\(.message.content | map(select(.type=="text") | .text) | join(" "))"' "$t" 2>/dev/null
+  agent_latest_message "$t" 2>/dev/null
 }
 
 # Poll until the transcript stops growing AND the newest entry is unseen,
@@ -48,15 +47,15 @@ while :; do
   [ "$now" = "$size" ] && stable=$((stable + 1)) || stable=0
   size=$now
   row=$(newest)
-  uuid=${row%%$'\t'*}
+  uuid=$(printf '%s' "$row" | jq -r '.id // empty')
   # Settled: file quiet for ~0.6s and we are looking at something new.
   [ "$stable" -ge 3 ] && [ -n "$uuid" ] && [ "$uuid" != "$prev" ] && break
   [ "$(date +%s)" -ge "$deadline" ] && break
   sleep 0.2
 done
 
-uuid=${row%%$'\t'*}
-text=$(printf '%s' "${row#*$'\t'}" | tts_resolve)
+uuid=$(printf '%s' "$row" | jq -r '.id // empty')
+text=$(printf '%s' "$row" | jq -r '.text // empty' | tts_resolve)
 
 [ "$CC_TTS_DEBUG" = 1 ] && printf '%s fired uuid=%.8s prev=%.8s stable=%s %s\n' \
   "$(date +%H:%M:%S)" "$uuid" "${prev:-none}" "$stable" \
@@ -76,14 +75,14 @@ fi
 
 if [ "${CC_TTS_OFFER:-0}" = 1 ] && [ -n "$TMUX_PANE" ]; then
   # Offer rather than speak: a small pane shows the summary and waits for a key.
-  offer="$cc_tts_run/offer.txt"
+  offer="$cc_tts_run/offer-$sid.txt"
   printf '%s' "$text" > "$offer"
   # Don't stack panes if one from a previous turn is still open.
-  prev=$(cat "$cc_tts_run/offer.pane" 2>/dev/null)
+  prev=$(cat "$cc_tts_run/offer-$sid.pane" 2>/dev/null)
   [ -n "$prev" ] && tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -qx "$prev" && exit 0
   disp=$(tmux split-window -l 7 -t "$TMUX_PANE" -P -F '#{pane_id}' \
     "$cc_tts_hooks/offer-view.sh '$offer' '$TMUX_PANE'" 2>/dev/null)
-  [ -n "$disp" ] && printf '%s' "$disp" > "$cc_tts_run/offer.pane"
+  [ -n "$disp" ] && printf '%s' "$disp" > "$cc_tts_run/offer-$sid.pane"
   exit 0
 fi
 

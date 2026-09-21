@@ -64,20 +64,14 @@ tts_log() {
 # nothing when there is no such block, and the caller then falls back to
 # speaking the whole message.
 tts_voice() {
-  awk '
-    { line = $0
-      while (1) {
-        if (!inv) {
-          i = index(line, "<voice>")
-          if (i == 0) break
-          line = substr(line, i + 7); inv = 1
-        }
-        j = index(line, "</voice>")
-        if (j == 0) { print line; break }
-        print substr(line, 1, j - 1); inv = 0; line = substr(line, j + 8)
-      }
-    }
-  '
+  # Use the last complete, non-nested block. An opening tag mentioned in
+  # prose or an earlier example must not consume the authored summary.
+  python3 -c '
+import re, sys
+blocks = re.findall(r"<voice>((?:(?!<voice>).)*?)</voice>", sys.stdin.read(), re.S)
+if blocks:
+    print(blocks[-1])
+'
 }
 
 # Trim to CC_TTS_MAXCHARS at a sentence boundary so speech never stops
