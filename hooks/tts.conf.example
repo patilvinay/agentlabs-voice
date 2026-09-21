@@ -23,7 +23,6 @@ CC_TTS_RATE_EDGE="${CC_TTS_RATE_EDGE:-+15%}"
 
 # 1 = speak automatically at the end of every turn
 # 0 = manual only: nothing is spoken until you press prefix v (or run /speak)
-CC_TTS_AUTO="${CC_TTS_AUTO:-0}"
 
 # 1 = stream synthesis into the player (speech starts ~0.2s, needs mpg123)
 # 0 = wait for the complete mp3 first (needed only if mpg123 is unavailable)
@@ -71,3 +70,13 @@ CC_TTS_ONLY_ACTIVE="${CC_TTS_ONLY_ACTIVE:-1}"
 # ~/.claude/scratch/<session-id>/.voice, so each session keeps its own and it
 # survives reboots. This value is the fallback for sessions that have not
 # chosen one.
+
+# --- auto-speak and the queue ----------------------------------------------
+# CC_TTS_AUTO=1 speaks replies without asking. prefix+A overrides it for one
+# session at a time, which is what you want when several agents are running:
+# only the one you are watching should talk. Either way nothing is spoken
+# unless that pane's window is on screen (CC_TTS_ONLY_ACTIVE below).
+#
+# Utterances queue and play in order; a new one never cuts off the one being
+# spoken. prefix+> skips the current one, prefix+V stops and drops the rest.
+CC_TTS_AUTO="${CC_TTS_AUTO:-0}"

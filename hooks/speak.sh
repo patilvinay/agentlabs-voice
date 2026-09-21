@@ -44,8 +44,12 @@ CC_TTS_DEBUG="${CC_TTS_DEBUG:-1}"
 # Resolve from the filesystem, not $XDG_RUNTIME_DIR: tmux's server does not
 # export it, so run-shell (both key bindings) would otherwise compute a
 # different directory than the hooks and lose track of pidfiles and mappings.
+# CC_TTS_RUN overrides it, which is how the queue tests get a private runtime
+# directory instead of fighting the live one.
 cc_tts_uid=$(id -u)
-if [ -d "/run/user/$cc_tts_uid" ]; then
+if [ -n "${CC_TTS_RUN:-}" ]; then
+  cc_tts_run="$CC_TTS_RUN"
+elif [ -d "/run/user/$cc_tts_uid" ]; then
   cc_tts_run="/run/user/$cc_tts_uid/claude-tts-$cc_tts_uid"
 else
   cc_tts_run="/tmp/claude-tts-$cc_tts_uid"
@@ -174,7 +178,7 @@ tts_resume() {
     return 1
   fi
   tts_log "resume from ${sec}s -> ${#rest} chars remaining"
-  tts_speak "$rest"
+  tts_enqueue --front "$rest"
 }
 
 # Silence anything we started earlier. Uses a pidfile so an unrelated
@@ -196,6 +200,14 @@ tts_cancel() {
   fi
 }
 
+
+# prefix+V: silence and forget. tts_cancel alone is a SKIP -- the drainer sees
+# its player die and moves to the next entry -- so stopping has to say so.
+tts_stop_all() {
+  : > "$cc_tts_qstop"
+  tts_queue_clear
+  tts_cancel
+}
 
 # ---------------------------------------------------------------- session id
 # Which Claude session does this call belong to? In hook context the transcript
@@ -223,6 +235,9 @@ tts_session_voice_file() {
 
 tts_apply_session_voice() {
   local f v
+  # Resume pins the voice it was already using; re-resolving could switch
+  # voice halfway through a message that is being picked back up.
+  [ "${CC_TTS_VOICE_PINNED:-0}" = 1 ] && return 0
   f=$(tts_session_voice_file "${1:-}") || return 0
   [ -f "$f" ] || return 0
   v=$(tr -d '[:space:]' < "$f")
@@ -230,6 +245,41 @@ tts_apply_session_voice() {
   # this file again, and a plain assignment here would be invisible to it --
   # it would fall back to the configured default and use the wrong voice.
   [ -n "$v" ] && export CC_TTS_VOICE_EDGE="$v"
+}
+
+# Auto-speak is per session, not per machine: you watch one session while five
+# others work, and only the one you are looking at should talk. prefix+A writes
+# this file; CC_TTS_AUTO in tts.conf is the default when it is absent.
+tts_session_auto() {                    # tts_session_auto [transcript]
+  local sid f
+  sid=$(tts_session_id "${1:-}" 2>/dev/null) || { printf '%s' "${CC_TTS_AUTO:-0}"; return 0; }
+  f="${AGENTLABS_SESSIONS:-$HOME/.claude/scratch}/$sid/.auto"
+  if [ -f "$f" ]; then tr -d '[:space:]' < "$f"; else printf '%s' "${CC_TTS_AUTO:-0}"; fi
+}
+
+# The end-of-turn pane, shared by the Stop hook and by voice-offer so mid-turn
+# and end-of-turn summaries look and behave identically.
+#
+# A summary arriving while a pane is already open is APPENDED rather than
+# stacking a second pane or overwriting the first. The agent can narrate twice
+# before you look up, and dropping the earlier one was the obvious bug in
+# making this work mid-turn. offer-view.sh redraws when the file changes.
+tts_offer() {                           # tts_offer <sid> <text> <pane>
+  local sid="$1" text="$2" pane="$3" offer prev disp
+  offer="$cc_tts_run/offer-$sid.txt"
+  prev=$(cat "$cc_tts_run/offer-$sid.pane" 2>/dev/null)
+  if [ -n "$prev" ] && tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -qx "$prev"; then
+    # \f separates summaries so each is spoken as its own utterance and can be
+    # skipped individually.
+    printf '\n\f\n%s' "$text" >> "$offer"
+    tts_log "offer appended to open pane $prev chars=${#text}"
+    return 0
+  fi
+  printf '%s' "$text" > "$offer"
+  disp=$(tmux split-window -l 7 -t "$pane" -P -F '#{pane_id}' \
+    "$cc_tts_hooks/offer-view.sh '$offer' '$pane'" 2>/dev/null)
+  [ -n "$disp" ] && printf '%s' "$disp" > "$cc_tts_run/offer-$sid.pane"
+  tts_log "offer pane=$disp chars=${#text}"
 }
 
 # Resume runs from a key binding with no session to resolve, and must not
@@ -302,10 +352,11 @@ tts_edge_play() {
   return 0
 }
 
-tts_speak() {
+# Synthesise and play, here and now. Called only by the drainer, which has the
+# lock; everything else goes through tts_speak and waits its turn.
+tts_say() {
   local text="$1"
   case "$text" in ''|' ') return 0 ;; esac
-  tts_apply_session_voice
   printf '%s' "$CC_TTS_VOICE_EDGE" > "$cc_tts_run/voice.last" 2>/dev/null
   # Keep the utterance on disk so an interrupted one can be resumed by text.
   printf '%s' "$text" > "$cc_tts_run/say.txt" 2>/dev/null
@@ -354,3 +405,11 @@ tts_resolve() {
   [ "${#out}" -lt "${#full}" ] && printf ' … message truncated.'
   printf '\n'
 }
+
+# The queue sits on top of everything above: tts_speak appends, a locked
+# drainer calls tts_say. Sourced last so the functions it uses are defined.
+. "$cc_tts_hooks/queue.sh"
+
+# Public entry point, unchanged for every existing caller: hand it text and it
+# gets spoken. What changed is that it now waits its turn instead of cutting in.
+tts_speak() { tts_enqueue "$@"; }

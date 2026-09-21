@@ -31,5 +31,4 @@ text=$(printf '%s' "$message" | jq -r '.text' | tts_resolve)
 
 tts_log "say-last pane=${pane:-none} src=$(basename "$t") chars=${#text}"
 case "$text" in ''|' ') echo "say-last: nothing to speak" >&2; exit 0 ;; esac
-tts_cancel
-tts_speak "$text"
+tts_speak_now "$text"

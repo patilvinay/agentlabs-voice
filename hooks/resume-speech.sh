@@ -10,8 +10,9 @@
 . "$(dirname "$0")/speak.sh"
 
 [ "${1:-}" = "--pane" ] && { export CC_TTS_PANE="$2"; shift 2; }
-tts_apply_session_voice || true
-tts_recall_voice        # resuming must not change voice mid-message
+export CC_TTS_VOICE_PINNED=1   # resuming must not change voice mid-message
+tts_recall_voice
 
-tts_cancel          # stop current audio AND record where it got to
+tts_mark_stop       # record where it got to, before anything is killed
 tts_resume || exit 1
+tts_cancel          # drop the current player; the drainer takes the front entry

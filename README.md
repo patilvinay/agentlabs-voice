@@ -7,7 +7,8 @@ cursor.
 Nothing speaks or records unless you press a key.
 
 ```
- prefix v      read the last reply aloud     prefix V   stop talking
+ prefix v      read the last reply aloud     prefix V   stop talking, drop the queue
+ prefix >      skip to the next utterance    prefix A   auto-speak on/off, this session
  prefix p      resume where it stopped       prefix y   pick this session's voice
  prefix Space  dictate, with live text       prefix N   dictate and send
  prefix m      dictate offline (whisper)     prefix e   dictate offline and send
@@ -42,6 +43,53 @@ no network, nothing leaves the machine.
 
 **Live dictation** (`prefix Space`) is the one thing that needs a key — see
 below.
+
+## Narrating during a turn, not just at the end
+
+An agent says useful things long before it stops: what it just found, what it
+is about to do, why it changed approach. Only the last of those was ever
+spoken, because the Stop hook is the only event that means "the turn is over".
+
+There is no event for "the assistant said something", and the hooks that come
+closest fire on every tool call -- which would mean narrating everything or
+guessing which prose mattered. So the agent says so itself. When it writes a
+`<voice>` block mid-turn it runs one command:
+
+```bash
+voice-offer
+```
+
+That reads the newest `<voice>` block out of the transcript and narrates it,
+the same way the end of a turn does. Add a line to your agent's instructions
+telling it when that is worth doing -- before a long build, after a finding
+that changes the plan -- or it will either never fire or fire constantly.
+
+The installer allowlists that one command in `settings.json`. Without it every
+narration would stop and ask permission, which rather defeats the point.
+
+## Speaking without being asked
+
+`prefix A` turns auto-speak on for the session you are in. Replies are then
+spoken as they arrive, with no pane and no keypress.
+
+Two things make that livable:
+
+**Nothing is interrupted.** Utterances queue and play in order. A summary
+arriving while another is still being spoken waits its turn instead of cutting
+it off mid-sentence. `prefix >` drops the one being spoken and moves to the
+next; `prefix V` stops and drops everything still waiting; `prefix p` brings
+back whichever one you just cut.
+
+**Only the session you are looking at talks.** Auto-speak is stored per
+session, beside that session's chosen voice, and even then nothing is spoken
+unless that pane's window is the one on screen. Five agents working in
+parallel stay silent until you switch to them. `prefix v` ignores all of this
+and reads on demand, always.
+
+With auto-speak off -- the default -- a finished summary offers a small pane
+instead, and `space` narrates it. Same pane for mid-turn and end-of-turn
+summaries; if a second arrives while the first is still open it is appended
+rather than dropped.
 
 ## Making dictation more accurate
 

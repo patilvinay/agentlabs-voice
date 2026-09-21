@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Narrate a <voice> block the agent has just written, mid-turn.
+#
+# The agent calls this itself, from its own shell tool, the moment it has
+# something worth hearing. That is why there is no hook: Claude Code has no
+# event for "the assistant said something", and the two hooks that come close
+# fire on every tool call, which would mean either narrating everything or
+# guessing. The agent already knows when it meant to be heard -- it wrote the
+# <voice> block -- so it says so.
+#
+#   voice-offer                  narrate the newest <voice> block
+#   voice-offer --text "..."     narrate this instead
+#   voice-offer --pane %6        for callers without TMUX_PANE
+#
+# Auto-speak on  -> queued and spoken, no keypress.
+# Auto-speak off -> the same 7-line pane you get at the end of a turn.
+# Either way, nothing happens unless this pane's window is the one on screen.
+. "$HOME/.claude/hooks/speak.sh" 2>/dev/null || . "$(dirname "$0")/../hooks/speak.sh"
+
+pane="${TMUX_PANE:-}" text="" force=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --text)  text="$2"; shift 2 ;;
+    --pane)  pane="$2"; shift 2 ;;
+    --force) force=1; shift ;;          # ignore the focus gate; for testing
+    *)       shift ;;
+  esac
+done
+[ -n "$pane" ] || { echo "voice-offer: no pane (pass --pane)" >&2; exit 1; }
+export CC_TTS_PANE="$pane"
+
+t=$(agent_pane_transcript "$pane" 2>/dev/null) \
+  || { echo "voice-offer: no agent session in pane $pane" >&2; exit 1; }
+export CC_TTS_TRANSCRIPT="$t"
+sid=$(agent_session_id "$t")
+
+# Content hash, not message id: one assistant message can be narrated once, and
+# a mid-turn block must not be re-offered when the turn ends and the Stop hook
+# looks at the same transcript.
+seen="$cc_tts_run/offered-$sid.hash"
+
+if [ -z "$text" ]; then
+  # The <voice> block is written before the tool call that runs this, but
+  # "before" is a claim about the writer flushing, so allow a beat for it. An
+  # unchanged hash means we are still looking at the previous one.
+  for _ in 1 2 3 4 5 6; do
+    raw=$(agent_latest_message "$t" 2>/dev/null | jq -r '.text // empty')
+    text=$(printf '%s\n' "$raw" | tts_voice)
+    h=$(printf '%s' "$text" | md5sum | cut -d' ' -f1)
+    [ -n "${text//[[:space:]]/}" ] && [ "$h" != "$(cat "$seen" 2>/dev/null)" ] && break
+    text=""
+    sleep 0.25
+  done
+fi
+
+[ -n "${text//[[:space:]]/}" ] || { tts_log "voice-offer: no unspoken <voice> block"; exit 0; }
+h=$(printf '%s' "$text" | md5sum | cut -d' ' -f1)
+[ "$h" = "$(cat "$seen" 2>/dev/null)" ] && { tts_log "voice-offer: already offered"; exit 0; }
+printf '%s' "$h" > "$seen"
+
+# Spoken text is cleaned but never trimmed: a <voice> block is written to be
+# heard in full.
+text=$(CC_TTS_MAXCHARS=0 tts_clean <<< "$text")
+
+# Five agents working in parallel must not become five voices. Manual playback
+# (prefix+v) deliberately ignores this; automatic narration must not.
+if [ "$force" != 1 ] && [ "${CC_TTS_ONLY_ACTIVE:-1}" = 1 ] && ! tts_pane_is_active "$pane"; then
+  tts_log "voice-offer: silent, pane $pane not on screen"
+  exit 0
+fi
+
+auto=$(tts_session_auto "$t")
+if [ "$auto" = 1 ]; then
+  tts_log "voice-offer auto pane=$pane sid=${sid:0:8} chars=${#text}"
+  tts_speak "$text"                     # queued; never cuts into what is playing
+elif [ "${CC_TTS_OFFER:-1}" = 1 ]; then
+  tts_offer "$sid" "$text" "$pane"
+else
+  tts_log "voice-offer: auto off and offer off, nothing to do"
+fi
+exit 0

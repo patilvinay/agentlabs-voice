@@ -17,6 +17,11 @@ if [ -f "$SETTINGS" ] && command -v jq >/dev/null; then
     if .hooks then .hooks.Stop=((.hooks.Stop//[])|strip)
       | .hooks.Notification=((.hooks.Notification//[])|strip)
       | .hooks |= with_entries(select(.value|length>0)) else . end' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
+  # and the one permission the installer granted the agent
+  tmp=$(mktemp)
+  jq --arg rule "Bash($BINDIR/voice-offer:*)" '
+    if .permissions.allow then .permissions.allow |= map(select(. != $rule)) else . end
+  ' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
 fi
 codex_hooks="${CODEX_HOME:-$HOME/.codex}/hooks.json"
 if [ -f "$codex_hooks" ] && command -v jq >/dev/null; then

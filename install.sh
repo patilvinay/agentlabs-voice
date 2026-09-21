@@ -100,7 +100,15 @@ if command -v jq >/dev/null 2>&1; then
     | .hooks.Stop         = ((.hooks.Stop // [])         | strip([$stop])) + [entry($stop)]
     | .hooks.Notification = ((.hooks.Notification // []) | strip([$note])) + [entry($note)]
   ' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
-  ok "Stop and Notification hooks registered"
+  # voice-offer is called by the AGENT, not by you, so a permission prompt on
+  # every mid-turn summary would defeat the point. Allowlist that one command;
+  # nothing else is granted.
+  tmp=$(mktemp)
+  jq --arg rule "Bash($BINDIR/voice-offer:*)" '
+    .permissions = (.permissions // {})
+    | .permissions.allow = (((.permissions.allow // []) + [$rule]) | unique)
+  ' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
+  ok "Stop and Notification hooks registered; voice-offer allowlisted"
 else
   warn "jq not found — register the hooks yourself, see the README"
 fi
@@ -138,7 +146,8 @@ $(printf '\033[1m==>\033[0m') Installed.
 
   Prefix is $prefix.  Press it, then:
 
-    v   read the last reply aloud     V   stop talking
+    v   read the last reply aloud     V   stop talking, drop the queue
+    >   skip to the next utterance    A   auto-speak on/off, this session
     p   resume where it stopped       y   pick this session's voice
     Space  dictate with live text     N   dictate and send
     m   dictate offline (whisper)     e   dictate offline and send

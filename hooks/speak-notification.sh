@@ -22,6 +22,5 @@ if [ -n "$raw" ] && printf '%s' "$raw" | grep -qiE "$CC_TTS_NOTIFY_SKIP"; then
 fi
 
 text=$(printf '%s' "$raw" | tts_clean)
-tts_cancel
-tts_speak "$text"
+tts_speak_now "$text"
 exit 0

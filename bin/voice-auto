@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# prefix+A: turn auto-speak on or off for THIS session.
+#
+# Per session rather than per machine, because the whole point is that you
+# watch one agent while others work. The file sits beside the session's chosen
+# voice; with no file, CC_TTS_AUTO from tts.conf decides.
+#
+#   voice-auto <pane> [on|off]     no argument toggles
+. "$HOME/.claude/hooks/speak.sh" 2>/dev/null || . "$(dirname "$0")/../hooks/speak.sh"
+
+pane="${1:-${TMUX_PANE:-}}"; want="${2:-toggle}"
+[ -n "$pane" ] || { echo "voice-auto: no pane" >&2; exit 1; }
+export CC_TTS_PANE="$pane"
+
+t=$(agent_pane_transcript "$pane" 2>/dev/null) \
+  || { tmux display-message "voice-auto: no agent session in this pane" 2>/dev/null; exit 1; }
+sid=$(agent_session_id "$t")
+d="${AGENTLABS_SESSIONS:-$HOME/.claude/scratch}/$sid"
+mkdir -p "$d"
+
+now=$(tts_session_auto "$t")
+case "$want" in
+  on|1)   new=1 ;;
+  off|0)  new=0 ;;
+  *)      [ "$now" = 1 ] && new=0 || new=1 ;;
+esac
+printf '%s' "$new" > "$d/.auto"
+
+if [ "$new" = 1 ]; then
+  tmux display-message "auto-speak ON for this session — replies are spoken when this window is on screen" 2>/dev/null
+else
+  tmux display-message "auto-speak OFF for this session — summaries offer a pane instead" 2>/dev/null
+fi
+tts_log "auto-speak sid=${sid:0:8} $now -> $new"

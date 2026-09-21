@@ -13,7 +13,9 @@ and everything agent-specific is confined to `lib/agent.sh`.
 
 | key | does |
 |-----|------|
-| `v` / `V` | speak the last reply / stop |
+| `v` / `V` | speak the last reply / stop and drop the queue |
+| `>` | skip the utterance being spoken, play the next |
+| `A` | auto-speak on/off, for this session only |
 | `p` | resume an interrupted reply, from the sentence it was cut in |
 | `y` | pick this session's voice |
 | `Space` (or `n`) | dictate with live text; `N` dictates and sends |
@@ -33,12 +35,52 @@ Nothing has to be set up by hand. Two things split a small pane and clean it up:
 Reading a session's markdown in a browser is a separate project,
 [agentlabs-ideas-skill](https://github.com/patilvinay/agentlabs-ideas-skill).
 
+## Narrating mid-turn
+
+`voice-offer` is the one part of this the AGENT calls, not you. There is no
+hook for "the assistant said something" -- the nearest ones fire on every tool
+call -- so the agent announces itself: it writes a `<voice>` block and then
+runs the command, which reads that block back out of the transcript and
+narrates it exactly as the end of a turn would.
+
+    voice-offer                 the newest <voice> block
+    voice-offer --text "..."    this text instead
+    voice-offer --force         ignore the focus gate (testing)
+
+It exits silently, and this is usually correct rather than broken:
+
+- no `<voice>` block in the newest message -- it never speaks whole replies
+  mid-turn, which would mean narrating every tool call
+- the same block was already narrated (matched by content hash, so the Stop
+  hook does not say it again when the turn ends)
+- the pane's window is not the one on screen
+
+## Auto-speak and the queue
+
+`CC_TTS_AUTO=1` speaks without asking; `prefix A` toggles it per session, in
+`<scratch>/<session-id>/.auto`, so watching one agent does not make five of
+them talk. With it off, summaries offer a pane instead.
+
+Utterances QUEUE. This replaced the original cancel-on-new behaviour, where
+each new utterance killed the one in progress -- fine for one reply per turn,
+wrong the moment anything narrates mid-turn.
+
+- `tts_speak` appends; a single drainer under `flock` plays them in order
+- each entry carries its own voice, because sessions choose different ones and
+  the drainer may reach an entry long after it was queued
+- `tts_speak_now` (prefix `v`, permission prompts) jumps the queue and drops
+  what is playing; `prefix p` brings that back
+- `tts_cancel` alone is a SKIP: the drainer sees its player die and takes the
+  next entry. `tts_stop_all` sets the stop flag and clears the queue
+
 ## Where state lives
 
 | what | where |
 |------|-------|
 | settings | `~/.claude/hooks/tts.conf` (holds the API key; mode 600, gitignored) |
 | this session's voice | `~/.claude/scratch/<session-id>/.voice` |
+| this session's auto-speak | `~/.claude/scratch/<session-id>/.auto` |
+| the utterance queue | `/run/user/<uid>/claude-tts-<uid>/queue/` |
 | the live panel | `~/.claude/wave/claude-view.md` |
 | speech runtime + log | `/run/user/<uid>/claude-tts-<uid>/debug.log` |
 | pane → session map | `/run/user/<uid>/agentlabs/` (shared with the companion project) |
@@ -64,6 +106,9 @@ back to the offline engine, whether a turn was skipped.
 - **Silence is usually deliberate.** `CC_TTS_ONLY_ACTIVE=1` keeps the Stop hook
   quiet unless that pane's tmux window is selected and a client is attached.
   `prefix v` always speaks.
+- **A stale stop flag.** `prefix V` with nothing playing leaves the flag with
+  no drainer to consume it, and it would then truncate the next batch after
+  one utterance. `tts_enqueue` clears it.
 - **Stale pane mappings.** A pane keeps its `pane-N.transcript` after the agent
   moves elsewhere, so `session-dir` prefers a pane currently running one.
 
@@ -72,5 +117,11 @@ back to the offline engine, whether a turn was skipped.
 End a substantive reply with a `<voice>` block: plain prose, no markdown, code,
 paths or URLs, stating the outcome rather than the process. Without one the
 hook reads the entire message aloud, tables included.
+
+Mid-turn, write a `<voice>` block and then run `voice-offer`. Worth doing when
+the person would otherwise wait without knowing why: before something slow,
+after a finding that changes the approach, when a plan turns out to be wrong.
+Not worth doing for progress noise -- narrating every step is how someone ends
+up turning the whole thing off.
 
 `<view>` blocks belong to the companion project's skill, `agentlabs-ideas`.

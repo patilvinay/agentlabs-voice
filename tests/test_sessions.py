@@ -16,7 +16,11 @@ class SessionTests(unittest.TestCase):
         self.run = self.home / 'run'
         self.run.mkdir()
         self.env = {**os.environ, 'HOME': str(self.home), 'AGENTLABS_RUN': str(self.run),
-                    'TMUX_PANE': '', 'CC_TTS_CONF': '/dev/null'}
+                    'TMUX_PANE': '', 'CC_TTS_CONF': '/dev/null',
+                    # Never touch the live runtime directory, or its queue, or
+                    # the speakers, while the suite runs.
+                    'CC_TTS_RUN': str(self.home / 'ttsrun'),
+                    'CC_TTS_ENGINE': 'off', 'CC_TTS_DEBUG': '0'}
 
     def transcript(self, name, records):
         p = self.home / name
@@ -92,11 +96,15 @@ class SessionTests(unittest.TestCase):
         hooks = self.home / 'hooks'
         hooks.mkdir()
         shutil.copy(ROOT / 'hooks/say-last.sh', hooks)
-        # Replace only the audio boundary; use real routing, parsing and voice selection.
+        # Replace only the audio boundary; use real routing, parsing, queueing
+        # and voice selection. The drainer normally runs detached under flock;
+        # here it runs on exit so the test stays deterministic.
         (hooks / 'speak.sh').write_text(
             f'source "{ROOT}/hooks/speak.sh"\n'
+            'tts_kick() { :; }\n'
             'tts_cancel() { :; }\n'
-            'tts_speak() { tts_apply_session_voice; printf "%s\\n%s\\n" "$CC_TTS_VOICE_EDGE" "$1"; }\n')
+            'tts_say() { printf "%s\\n%s\\n" "$CC_TTS_VOICE_EDGE" "$1"; }\n'
+            'trap tts_drain_loop EXIT\n')
         result = subprocess.run(['bash', str(hooks / 'say-last.sh'), '--pane', '%999998'],
                                 env=self.env, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)

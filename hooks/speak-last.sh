@@ -25,6 +25,7 @@ export CC_TTS_TRANSCRIPT="$t"
 agent_remember_pane "${TMUX_PANE:-}" "$t"
 
 # Speak automatically (AUTO), offer a pane at end of turn (OFFER), or neither.
+# AUTO is resolved per session below; this is only the cheap early out.
 [ "${CC_TTS_AUTO:-1}" = 1 ] || [ "${CC_TTS_OFFER:-0}" = 1 ] || exit 0
 
 [ -n "$t" ] && [ -f "$t" ] || exit 0
@@ -73,18 +74,16 @@ if [ "${CC_TTS_ONLY_ACTIVE:-1}" = 1 ] && ! tts_pane_is_active "$TMUX_PANE"; then
   exit 0
 fi
 
-if [ "${CC_TTS_OFFER:-0}" = 1 ] && [ -n "$TMUX_PANE" ]; then
-  # Offer rather than speak: a small pane shows the summary and waits for a key.
-  offer="$cc_tts_run/offer-$sid.txt"
-  printf '%s' "$text" > "$offer"
-  # Don't stack panes if one from a previous turn is still open.
-  prev=$(cat "$cc_tts_run/offer-$sid.pane" 2>/dev/null)
-  [ -n "$prev" ] && tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -qx "$prev" && exit 0
-  disp=$(tmux split-window -l 7 -t "$TMUX_PANE" -P -F '#{pane_id}' \
-    "$cc_tts_hooks/offer-view.sh '$offer' '$TMUX_PANE'" 2>/dev/null)
-  [ -n "$disp" ] && printf '%s' "$disp" > "$cc_tts_run/offer-$sid.pane"
-  exit 0
-fi
+# The agent may already have narrated this exact summary mid-turn with
+# voice-offer. Saying it again because the turn happened to end is the kind of
+# repetition that makes people switch the feature off.
+h=$(printf '%s' "$text" | md5sum | cut -d' ' -f1)
+seen="$cc_tts_run/offered-$sid.hash"
+[ "$h" = "$(cat "$seen" 2>/dev/null)" ] && { tts_log "already narrated mid-turn"; exit 0; }
+printf '%s' "$h" > "$seen"
 
-tts_cancel
-tts_speak "$text"
+if [ "$(tts_session_auto "$t")" = 1 ]; then
+  tts_speak "$text"                    # queued; never cuts into what is playing
+elif [ "${CC_TTS_OFFER:-0}" = 1 ] && [ -n "$TMUX_PANE" ]; then
+  tts_offer "$sid" "$text" "$TMUX_PANE"
+fi
