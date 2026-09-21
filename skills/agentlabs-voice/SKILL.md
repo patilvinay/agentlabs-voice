@@ -35,25 +35,44 @@ Nothing has to be set up by hand. Two things split a small pane and clean it up:
 Reading a session's markdown in a browser is a separate project,
 [agentlabs-ideas-skill](https://github.com/patilvinay/agentlabs-ideas-skill).
 
-## Narrating mid-turn
+## Narrating during a turn
 
-`voice-offer` is the one part of this the AGENT calls, not you. There is no
-hook for "the assistant said something" -- the nearest ones fire on every tool
-call -- so the agent announces itself: it writes a `<voice>` block and then
-runs the command, which reads that block back out of the transcript and
-narrates it exactly as the end of a turn would.
+During a long turn, write a `<voice>` block and then run `voice-offer` as the
+next tool call. It reads that block out of the transcript and narrates it the
+same way the end of a turn does. Don't wait for it; carry on working.
+
+A turn has up to three beats, and each must say something the others do not:
+
+**Opening — what I understood, and what I am about to do.** Only when the turn
+will take real time. Its real job is catching a misheard request: dictation
+garbles things, and hearing the task said back wrong costs three seconds to
+correct instead of three minutes. Say the task and the shape of the plan, not
+a list of steps. Skip it entirely when auto-speak is off — the pane would pop
+and grab focus the moment they finished typing, and they are looking at the
+screen anyway.
+
+**Middle — something changed.** A finding that redirects the work, a plan that
+turned out to be wrong, a blocking question, or a slow thing about to start.
+Only when it actually changed; there is nothing to say most of the time.
+
+**Closing — the outcome.** The `<voice>` block at the end of the reply, as
+always.
+
+Three a turn is the ceiling and most turns want one. Do not narrate progress
+for its own sake — "reading the config now", "running the tests", "that
+worked". Narrating every step is how this ends up switched off.
+
+Same rules as the end-of-turn block: plain prose for the ear, no markdown,
+code, paths, flags or URLs; the outcome, not the process. Never repeat what an
+earlier beat already said.
+
+`voice-offer` exits silently and returns 0 when there is nothing new to say,
+when the same text was already narrated, or when the pane is not on screen.
+Calling it and hearing nothing is not a failure, so do not retry or debug it.
 
     voice-offer                 the newest <voice> block
     voice-offer --text "..."    this text instead
     voice-offer --force         ignore the focus gate (testing)
-
-It exits silently, and this is usually correct rather than broken:
-
-- no `<voice>` block in the newest message -- it never speaks whole replies
-  mid-turn, which would mean narrating every tool call
-- the same block was already narrated (matched by content hash, so the Stop
-  hook does not say it again when the turn ends)
-- the pane's window is not the one on screen
 
 ## Auto-speak and the queue
 

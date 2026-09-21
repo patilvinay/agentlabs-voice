@@ -60,9 +60,27 @@ voice-offer
 ```
 
 That reads the newest `<voice>` block out of the transcript and narrates it,
-the same way the end of a turn does. Add a line to your agent's instructions
-telling it when that is worth doing -- before a long build, after a finding
-that changes the plan -- or it will either never fire or fire constantly.
+the same way the end of a turn does.
+
+What to tell your agent about *when* matters more than the mechanism, or it
+will either never fire or narrate every step. The rhythm that works is three
+beats, each saying something the others do not:
+
+| beat | says | when |
+|------|------|------|
+| opening | what it understood, what it is about to do | only if the turn will take real time |
+| middle | something changed -- a finding, a wrong plan, a blocker | only when it actually did |
+| closing | the outcome | the `<voice>` block at the end of the reply |
+
+The opening beat earns its place if you dictate. Dictation garbles things, and
+hearing the task said back wrong costs three seconds to correct instead of
+three minutes. It is worth skipping when auto-speak is off, though -- the pane
+would pop and take focus the moment you finished typing, and you are looking
+at the screen anyway.
+
+Three a turn is a ceiling; most turns want one. The wording this repo uses is
+in `skills/agentlabs-voice/SKILL.md`, ready to paste into a `CLAUDE.md` or
+`AGENTS.md`.
 
 The installer allowlists that one command in `settings.json`. Without it every
 narration would stop and ask permission, which rather defeats the point.
