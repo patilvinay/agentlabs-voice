@@ -9,6 +9,7 @@ Nothing speaks or records unless you press a key.
 ```
  prefix v      read the last reply aloud     prefix V   stop talking, drop the queue
  prefix >      skip to the next utterance    prefix A   auto-speak on/off, this session
+ prefix u      where is it right now?
  prefix p      resume where it stopped       prefix y   pick this session's voice
  prefix Space  dictate, with live text       prefix N   dictate and send
  prefix m      dictate offline (whisper)     prefix e   dictate offline and send
@@ -112,6 +113,28 @@ With auto-speak off -- the default -- a finished summary offers a small pane
 instead, and `space` narrates it. Same pane for mid-turn and end-of-turn
 summaries; if a second arrives while the first is still open it is appended
 rather than dropped.
+
+## Asking where it is
+
+`prefix u` answers immediately:
+
+> *Working for 4 minutes. 23 tool calls, currently running Bash. Last thing I
+> said: the wording is in all three places now.*
+
+It reads the transcript rather than asking the agent, and that is the whole
+point. A message sent mid-turn is only delivered alongside the next tool
+result, so asking an agent "status?" while a four-minute build is running
+means waiting four minutes for the reply -- the longer it has been quiet, the
+longer you wait to find out why. This costs nothing and answers while the
+agent is still blocked.
+
+It jumps the queue, for the same reason `prefix v` does: you pressed a key to
+ask a question, and hearing the answer after three minutes of narration is no
+answer at all.
+
+Asking the agent is still worth doing when you want an opinion rather than a
+fact -- what it makes of the state, what is left. Tell it in its instructions
+to answer that by voice, or you will get a wall of text you have to read.
 
 ## Making dictation more accurate
 

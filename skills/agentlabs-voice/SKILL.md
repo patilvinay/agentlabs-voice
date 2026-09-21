@@ -16,6 +16,7 @@ and everything agent-specific is confined to `lib/agent.sh`.
 | `v` / `V` | speak the last reply / stop and drop the queue |
 | `>` | skip the utterance being spoken, play the next |
 | `A` | auto-speak on/off, for this session only |
+| `u` | where is this session right now (read from the transcript) |
 | `p` | resume an interrupted reply, from the sentence it was cut in |
 | `y` | pick this session's voice |
 | `Space` (or `n`) | dictate with live text; `N` dictates and sends |
@@ -54,6 +55,13 @@ screen anyway.
 **Middle — something changed.** A finding that redirects the work, a plan that
 turned out to be wrong, a blocking question, or a slow thing about to start.
 Only when it actually changed; there is nothing to say most of the time.
+
+**On request — they asked mid-turn.** A steer like "status?" or "what's
+happening" is a request to HEAR the answer, not read it: write a `<voice>`
+block and run `voice-offer` rather than replying in text alone. `prefix u`
+answers the factual version instantly from the transcript; being asked
+directly means they want the interpretation -- what you make of it, what is
+left, whether it is going wrong.
 
 **Closing — the outcome.** The `<voice>` block at the end of the reply, as
 always.

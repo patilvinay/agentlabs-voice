@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# prefix+u: where is this session right now?
+#
+# Read straight from the transcript rather than asking the agent. A mid-turn
+# steer is only delivered alongside the next tool result, so asking "status?"
+# while a four-minute build is running means waiting four minutes for the
+# answer -- the longer it has been quiet, the longer you wait to find out why.
+# This answers immediately and costs nothing.
+#
+# It jumps the queue for the same reason prefix+v does: you pressed a key to
+# ask a question, and hearing the answer after three minutes of narration is
+# no answer at all.
+. "$HOME/.claude/hooks/speak.sh" 2>/dev/null || . "$(dirname "$0")/../hooks/speak.sh"
+
+pane="${1:-${TMUX_PANE:-}}"
+[ -n "$pane" ] || { echo "voice-status: no pane" >&2; exit 1; }
+export CC_TTS_PANE="$pane"
+
+t=$(agent_pane_transcript "$pane" 2>/dev/null) || {
+  tmux display-message "voice-status: no agent session in this pane" 2>/dev/null; exit 1; }
+export CC_TTS_TRANSCRIPT="$t"
+
+lib=""
+for c in "$AGENTLABS_LIB/transcript.py" "$HOME/.local/lib/agentlabs/transcript.py"; do
+  [ -f "$c" ] && { lib="$c"; break; }
+done
+[ -n "$lib" ] || { echo "voice-status: transcript.py not found" >&2; exit 1; }
+j=$(python3 "$lib" status "$t") || exit 1
+
+read -r elapsed tools flight tool said <<<"$(printf '%s' "$j" | \
+  jq -r '[.elapsed, .tools, .in_flight, (.last_tool // "-"), .said] | @tsv')"
+
+# Say "four minutes", not "263 seconds". Precision nobody asked for reads as
+# noise when it is spoken rather than printed.
+if   [ "$elapsed" -lt 10 ];  then dur="just now"
+elif [ "$elapsed" -lt 90 ];  then dur="$elapsed seconds"
+elif [ "$elapsed" -lt 5400 ]; then dur="$(( (elapsed + 30) / 60 )) minutes"
+else dur="$(( (elapsed + 1800) / 3600 )) hours"; fi
+
+plural() { [ "$1" = 1 ] && printf '%s' "$2" || printf '%ss' "$2"; }
+
+if [ "$flight" -gt 0 ]; then
+  line="Working for $dur. $tools $(plural "$tools" 'tool call'), currently running $tool."
+elif [ "$tools" -gt 0 ]; then
+  line="Nothing running right now. $tools $(plural "$tools" 'tool call') in the last $dur."
+else
+  line="Nothing running, and no tool calls since you last spoke."
+fi
+
+# The last thing meant to be heard beats a summary of activity. Trimmed at a
+# sentence boundary, because the whole of it may be minutes long.
+tail_text=$(printf '%s' "$j" | jq -r 'if .last_voice != "" then .last_voice else .last_text end')
+if [ -n "${tail_text//[[:space:]]/}" ]; then
+  tail_text=$(CC_TTS_MAXCHARS=240 tts_clean <<< "$tail_text")
+  line="$line Last thing I said: $tail_text"
+elif [ "$said" = 0 ]; then
+  line="$line Nothing said yet this turn."
+fi
+
+tts_log "voice-status pane=$pane elapsed=${elapsed}s tools=$tools flight=$flight"
+tts_speak_now "$line"

@@ -148,6 +148,7 @@ $(printf '\033[1m==>\033[0m') Installed.
 
     v   read the last reply aloud     V   stop talking, drop the queue
     >   skip to the next utterance    A   auto-speak on/off, this session
+    u   where is it right now?
     p   resume where it stopped       y   pick this session's voice
     Space  dictate with live text     N   dictate and send
     m   dictate offline (whisper)     e   dictate offline and send
