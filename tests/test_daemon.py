@@ -158,6 +158,8 @@ class DaemonPaneTests(unittest.TestCase):
         own = self.claude / 'scratch' / NEW
         for d in ('00-scratch', '10-review', '20-approved'):
             (own / d).mkdir(parents=True)
+        (self.project / NEW).mkdir()  # title already carried over
+        (self.project / NEW / 'custom-title.json').write_text('{}')
         subprocess.run(['bash', '-c', 'source "$1/lib/agent.sh"; agent_carry_over "$2"',
                         'test', str(ROOT), str(new)], env=self.env, check=True)
         self.assertTrue(own.is_symlink())

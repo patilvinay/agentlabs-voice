@@ -66,11 +66,11 @@ agent_carry_over() {                    # agent_carry_over <transcript>
   case "$t" in "$HOME"/.claude/projects/*.jsonl) ;; *) return 0 ;; esac
   sid=$(basename "$t" .jsonl)
   root="${AGENTLABS_SESSIONS:-$HOME/.claude/scratch}"
-  [ -e "$root/$sid" ] && [ -f "$(dirname "$t")/$sid/custom-title.json" ] && return 0
   # session-dir may already have laid out empty folders for the new id. rmdir
   # only removes empty ones, so anything with content stays and wins.
   [ -d "$root/$sid" ] && [ ! -L "$root/$sid" ] && [ -n "$(python3 "$AGENTLABS_LIB/transcript.py" lineage "$t" 2>/dev/null)" ] &&
     rmdir "$root/$sid"/00-scratch "$root/$sid"/10-review "$root/$sid"/20-approved "$root/$sid" 2>/dev/null
+  [ -e "$root/$sid" ] && [ -f "$(dirname "$t")/$sid/custom-title.json" ] && return 0
   for parent in $(python3 "$AGENTLABS_LIB/transcript.py" lineage "$t" 2>/dev/null); do
     [ -e "$root/$sid" ] || { [ -d "$root/$parent" ] && ln -s "$parent" "$root/$sid" 2>/dev/null; }
     dest="$(dirname "$t")/$sid/custom-title.json"
