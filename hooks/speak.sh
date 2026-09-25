@@ -363,6 +363,9 @@ tts_say() {
   local gen
   gen=$(date +%s%N)
   printf '%s' "$gen" > "$cc_tts_run/gen" 2>/dev/null
+  # The engine= lines below are written when playback ENDS; this one marks the
+  # start, so queue-to-audio latency can be read off the log.
+  tts_log "start engine=$CC_TTS_ENGINE chars=${#text}"
   case "$CC_TTS_ENGINE" in
     off|none|"") return 0 ;;
     edge)
