@@ -26,10 +26,16 @@ while [ $# -gt 0 ]; do
     *)       shift ;;
   esac
 done
+# Under `claude daemon` the agent runs outside tmux: start from its own session
+# and find the pane its client sits in.
+t=""
+if [ -z "$pane" ] && t=$(agent_self_transcript); then
+  pane=$(agent_pane_for_transcript "$t") || t=""
+fi
 [ -n "$pane" ] || { echo "voice-offer: no pane (pass --pane)" >&2; exit 1; }
 export CC_TTS_PANE="$pane"
 
-t=$(agent_pane_transcript "$pane" 2>/dev/null) \
+[ -n "$t" ] || t=$(agent_pane_transcript "$pane" 2>/dev/null) \
   || { echo "voice-offer: no agent session in pane $pane" >&2; exit 1; }
 export CC_TTS_TRANSCRIPT="$t"
 sid=$(agent_session_id "$t")

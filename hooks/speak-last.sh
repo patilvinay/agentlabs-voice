@@ -22,7 +22,16 @@ export CC_TTS_TRANSCRIPT="$t"
 # Remember which transcript belongs to this tmux pane, before any early exit.
 # Several Claude sessions can share one project directory, so "newest file in
 # the directory" would let the manual trigger speak a sibling session's reply.
+#
+# Under `claude daemon` the hook runs in a worker outside tmux, so there is no
+# TMUX_PANE; recover the client's pane. Everything below (focus gate, offer
+# pane) then works as it does for a session started in its pane.
+if [ -z "${TMUX_PANE:-}" ] && p=$(agent_pane_for_transcript "$t"); then
+  export TMUX_PANE="$p" CC_TTS_PANE="$p"
+fi
 agent_remember_pane "${TMUX_PANE:-}" "$t"
+# A daemon restart forks the session under a new id; keep its voice and title.
+agent_carry_over "$t"
 
 # Speak automatically (AUTO), offer a pane at end of turn (OFFER), or neither.
 # AUTO is resolved per session below; this is only the cheap early out.
