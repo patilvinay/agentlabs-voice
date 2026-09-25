@@ -29,6 +29,7 @@ fi
 [ -n "$sid" ] || { echo "session-dir: no agent session found for this pane" >&2; exit 1; }
 
 root="${AGENTLABS_SESSIONS:-$(agent_session_root "$t")}" # scratch, never an agent-owned transcript store
+agent_carry_over "$t"                                    # a daemon fork keeps its parent's folder
 d="$root/$sid"
 mkdir -p "$d/00-scratch" "$d/10-review" "$d/20-approved"
 printf '%s\n' "$d"
