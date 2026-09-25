@@ -73,6 +73,51 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(Path(result.stdout.strip()).name, 'mine')
 
+    def owner_setup(self, panes, sandbox=''):
+        """tmux with one window holding `panes`; %2 is the calling shell."""
+        bindir = self.home / 'bin'
+        bindir.mkdir(exist_ok=True)
+        tmux = bindir / 'tmux'
+        tmux.write_text('#!/bin/sh\ncase "$*" in\n'
+                        '  *pane_pid*) exit 1;;\n'
+                        f'  *@sandbox*) case "$*" in *%2*) echo "{sandbox}";; esac;;\n'
+                        f'  *list-panes*) echo "{" ".join(panes)}" | tr " " "\\n";;\n'
+                        '  *) exit 1;;\nesac\n')
+        tmux.chmod(0o755)
+        return {**self.env, 'PATH': f'{bindir}:{self.env["PATH"]}'}
+
+    def session_dir(self, env, pane):
+        return subprocess.run(['bash', str(ROOT / 'bin/session-dir'), pane],
+                              env=env, text=True, capture_output=True)
+
+    def test_shell_beside_one_agent_uses_that_agent(self):
+        mine = self.transcript('mine.jsonl', [])
+        (self.run / 'pane-1.transcript').write_text(str(mine))
+        env = self.owner_setup(['%1', '%2'])
+        result = self.session_dir(env, '%2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()).name, 'mine')
+
+    def test_shell_between_two_agents_is_ambiguous(self):
+        (self.run / 'pane-1.transcript').write_text(str(self.transcript('a.jsonl', [])))
+        (self.run / 'pane-3.transcript').write_text(str(self.transcript('b.jsonl', [])))
+        env = self.owner_setup(['%1', '%2', '%3'])
+        self.assertNotEqual(self.session_dir(env, '%2').returncode, 0)
+
+    def test_sandbox_tag_names_its_session(self):
+        a = self.transcript('a.jsonl', [])
+        b = self.transcript('b.jsonl', [])
+        (self.run / 'pane-1.transcript').write_text(str(a))
+        (self.run / 'pane-3.transcript').write_text(str(b))
+        sessions = self.home / '.claude/sessions'
+        sessions.mkdir(parents=True)
+        (sessions / f'{os.getpid()}.json').write_text(json.dumps(
+            {'pid': os.getpid(), 'name': 'auth', 'tmux': '0:@1.%3'}))
+        env = self.owner_setup(['%1', '%2', '%3'], sandbox='auth')
+        result = self.session_dir(env, '%2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()).name, 'b')
+
     def test_unknown_pane_does_not_borrow_claude_session(self):
         p = self.home / '.claude/projects/project'
         p.mkdir(parents=True)
