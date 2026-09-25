@@ -44,6 +44,28 @@ agent_pane_transcript() {               # agent_pane_transcript <pane>
   printf '%s' "$t"
 }
 
+# The agent a shell pane belongs to. Key bindings run from whichever pane has
+# focus, often the shell beside Claude rather than Claude itself. A pane
+# tagged `@sandbox <name>` belongs to the Claude session of that name;
+# otherwise to the only agent pane in its window. Two agents in one window is
+# ambiguous and resolves to nothing: never guess a neighbour.
+agent_owner_pane() {                    # agent_owner_pane <pane>
+  local pane="${1:-}" tag p found=""
+  [ -n "$pane" ] || return 1
+  tag=$(tmux display -p -t "$pane" '#{@sandbox}' 2>/dev/null)
+  if [ -n "$tag" ]; then
+    p=$(python3 "$AGENTLABS_LIB/transcript.py" named-pane "$tag" 2>/dev/null) \
+      && [ "$p" != "$pane" ] && { printf '%s' "$p"; return 0; }
+  fi
+  for p in $(tmux list-panes -t "$pane" -F '#{pane_id}' 2>/dev/null); do
+    [ "$p" = "$pane" ] && continue
+    agent_pane_transcript "$p" >/dev/null 2>&1 || continue
+    [ -z "$found" ] || return 1
+    found="$p"
+  done
+  [ -n "$found" ] && printf '%s' "$found"
+}
+
 # The pane for a transcript, when the caller has no TMUX_PANE: a Claude session
 # hosted by `claude daemon` runs in a worker outside tmux, while its pane holds
 # only a client. Resolved from Claude's own process records, then from the pane

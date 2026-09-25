@@ -218,6 +218,15 @@ def claude_pane(path):
     return 1
 
 
+def named_pane(name):
+    """The pane of the one live Claude session with this name (/rename)."""
+    panes = {pane for record, pane in _clients() if record.get('name') == name}
+    if len(panes) != 1:
+        return 1
+    print(panes.pop())
+    return 0
+
+
 def print_lineage(sid):
     print('\n'.join(lineage(Path(sid).stem)[1:]))
     return 0
@@ -292,7 +301,7 @@ if __name__ == '__main__':
         action, value = sys.argv[1:]
         sys.exit({'latest': latest, 'id': session_id, 'pane': pane_transcript,
               'status': status, 'claude-pane': claude_pane,
-              'lineage': print_lineage}[action](value))
+              'lineage': print_lineage, 'named-pane': named_pane}[action](value))
     except (OSError, ValueError, KeyError) as error:
         print(f'transcript: {error}', file=sys.stderr)
         sys.exit(1)

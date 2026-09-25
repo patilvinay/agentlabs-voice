@@ -6,7 +6,8 @@
 # TMUX_PANE is EMPTY inside tmux run-shell bindings and display-popup, so the
 # pane is passed in by whatever binding calls this.
 #
-# A supplied pane resolves only its own session. Without a pane, the legacy
+# A supplied pane resolves its own session, or, for the shell beside an agent,
+# that agent's (see agent_owner_pane). Without a pane, the legacy
 # working-directory lookup remains available for use outside tmux.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +24,10 @@ t=""
 # session when its mapping is missing.
 if [ -n "$pane" ]; then
   t=$(agent_pane_transcript "$pane" 2>/dev/null) && sid=$(agent_session_id "$t")
+  # Called from the shell beside the agent: use the agent it belongs to.
+  if [ -z "$sid" ] && owner=$(agent_owner_pane "$pane"); then
+    t=$(agent_pane_transcript "$owner" 2>/dev/null) && sid=$(agent_session_id "$t")
+  fi
 else
   t=$(agent_newest_transcript "$PWD" 2>/dev/null) && sid=$(agent_session_id "$t")
 fi
