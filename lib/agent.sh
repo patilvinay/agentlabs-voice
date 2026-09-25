@@ -44,6 +44,48 @@ agent_pane_transcript() {               # agent_pane_transcript <pane>
   printf '%s' "$t"
 }
 
+# The pane for a transcript, when the caller has no TMUX_PANE: a Claude session
+# hosted by `claude daemon` runs in a worker outside tmux, while its pane holds
+# only a client. Resolved from Claude's own process records, then from the pane
+# map through the session's fork lineage; the map is rewritten so it never
+# keeps pointing at the parent. Prints nothing and fails when unknown.
+agent_pane_for_transcript() {           # agent_pane_for_transcript <transcript>
+  local t="${1:-}" pane
+  [ -n "$t" ] || return 1
+  pane=$(python3 "$AGENTLABS_LIB/transcript.py" claude-pane "$t" 2>/dev/null) || return 1
+  [[ "$pane" =~ ^%[0-9]+$ ]] || return 1
+  agent_remember_pane "$pane" "$t"
+  printf '%s' "$pane"
+}
+
+# A daemon restart relaunches a session as a fork with a new id. Carry the
+# parent's scratch folder (and with it .voice/.auto) and its title across, so
+# the session keeps its identity. Never overwrites anything that exists.
+agent_carry_over() {                    # agent_carry_over <transcript>
+  local t="${1:-}" sid parent root title dest
+  case "$t" in "$HOME"/.claude/projects/*.jsonl) ;; *) return 0 ;; esac
+  sid=$(basename "$t" .jsonl)
+  root="${AGENTLABS_SESSIONS:-$HOME/.claude/scratch}"
+  [ -e "$root/$sid" ] && [ -f "$(dirname "$t")/$sid/custom-title.json" ] && return 0
+  for parent in $(python3 "$AGENTLABS_LIB/transcript.py" lineage "$t" 2>/dev/null); do
+    [ -e "$root/$sid" ] || { [ -d "$root/$parent" ] && ln -s "$parent" "$root/$sid" 2>/dev/null; }
+    dest="$(dirname "$t")/$sid/custom-title.json"
+    title=$(ls -1 "$HOME"/.claude/projects/*/"$parent"/custom-title.json 2>/dev/null | head -1)
+    [ -f "$dest" ] || { [ -n "$title" ] && mkdir -p "${dest%/*}" && cp "$title" "$dest"; }
+    [ -e "$root/$sid" ] && [ -f "$dest" ] && break
+  done
+  return 0
+}
+
+# The transcript of the Claude session this process belongs to, from the id
+# Claude exports to hooks and tool calls.
+agent_self_transcript() {
+  local sid="${CLAUDE_CODE_SESSION_ID:-}" t
+  [[ "$sid" =~ ^[0-9a-f-]+$ ]] || return 1
+  t=$(ls -1 "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1)
+  [ -n "$t" ] && printf '%s' "$t"
+}
+
 # --- per-agent transcript stores -------------------------------------------
 # Newest transcript for a working directory, used when no pane map exists yet
 # (the first turn of a session, or a manual run outside tmux).
