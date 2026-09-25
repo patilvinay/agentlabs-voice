@@ -20,7 +20,7 @@ and everything agent-specific is confined to `lib/agent.sh`.
 | `p` | resume an interrupted reply, from the sentence it was cut in |
 | `y` | pick this session's voice |
 | `Space` (or `n`) | dictate with live text; `N` dictates and sends |
-| `C-Space` | tmux `next-layout`, displaced by `Space` |
+| `C-Space`, `S-Space` | same as `Space`, for when Ctrl or Shift is still held after the `C-a` prefix. Nothing near Space changes the layout; use tmux's `M-1`..`M-5` |
 | `m` / `e` | dictate offline via whisper / and send |
 
 ## The helper panes create themselves
