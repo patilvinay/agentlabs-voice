@@ -220,7 +220,7 @@ tts_session_id() {
   if [ -n "$t" ]; then agent_session_id "$t"; return 0; fi
   for pane in "${CC_TTS_PANE:-}" "${TMUX_PANE:-}"; do
     [ -n "$pane" ] || continue
-    t=$(agent_pane_transcript "$pane" 2>/dev/null) || continue
+    t=$(agent_session_transcript "$pane") || continue
     agent_session_id "$t"; return 0
   done
   return 1

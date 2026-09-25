@@ -66,6 +66,15 @@ agent_owner_pane() {                    # agent_owner_pane <pane>
   [ -n "$found" ] && printf '%s' "$found"
 }
 
+# The transcript for a key binding's pane: the pane's own session, or, for the
+# shell beside an agent, that agent's. What every pane-driven command uses.
+agent_session_transcript() {            # agent_session_transcript <pane>
+  local owner
+  agent_pane_transcript "$1" 2>/dev/null && return 0
+  owner=$(agent_owner_pane "$1") || return 1
+  agent_pane_transcript "$owner" 2>/dev/null
+}
+
 # The pane for a transcript, when the caller has no TMUX_PANE: a Claude session
 # hosted by `claude daemon` runs in a worker outside tmux, while its pane holds
 # only a client. Resolved from Claude's own process records, then from the pane

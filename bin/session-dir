@@ -14,7 +14,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 for c in "$HERE/../lib/agent.sh" "$HOME/.local/lib/agentlabs/agent.sh"; do
   [ -f "$c" ] && { . "$c"; break; }
 done
-command -v agent_pane_transcript >/dev/null || { echo "session-dir: lib/agent.sh not found" >&2; exit 1; }
+command -v agent_session_transcript >/dev/null || { echo "session-dir: lib/agent.sh not found" >&2; exit 1; }
 
 pane="${1:-${TMUX_PANE:-}}"
 sid=""
@@ -23,11 +23,7 @@ t=""
 # A supplied pane is authoritative. Never choose a neighbor or global newest
 # session when its mapping is missing.
 if [ -n "$pane" ]; then
-  t=$(agent_pane_transcript "$pane" 2>/dev/null) && sid=$(agent_session_id "$t")
-  # Called from the shell beside the agent: use the agent it belongs to.
-  if [ -z "$sid" ] && owner=$(agent_owner_pane "$pane"); then
-    t=$(agent_pane_transcript "$owner" 2>/dev/null) && sid=$(agent_session_id "$t")
-  fi
+  t=$(agent_session_transcript "$pane") && sid=$(agent_session_id "$t")
 else
   t=$(agent_newest_transcript "$PWD" 2>/dev/null) && sid=$(agent_session_id "$t")
 fi

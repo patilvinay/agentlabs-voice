@@ -13,7 +13,9 @@ if [ "${1:-}" = "--pane" ]; then pane="$2"; shift 2; fi
 t="${1:-}"
 # Prefer the transcript this pane's own Claude session is writing.
 if [ -z "$t" ] && [ -n "$pane" ]; then
-  t=$(agent_pane_transcript "$pane" 2>/dev/null) || {
+  t=$(agent_session_transcript "$pane") || {
+    tts_log "say-last: no session for pane $pane"
+    tmux display-message "say-last: no agent session for this pane" 2>/dev/null
     echo "say-last: no session found for pane $pane" >&2; exit 1;
   }
 fi

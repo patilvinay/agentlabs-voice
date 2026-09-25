@@ -12,8 +12,8 @@ pane="${1:-${TMUX_PANE:-}}"; want="${2:-toggle}"
 [ -n "$pane" ] || { echo "voice-auto: no pane" >&2; exit 1; }
 export CC_TTS_PANE="$pane"
 
-t=$(agent_pane_transcript "$pane" 2>/dev/null) \
-  || { tmux display-message "voice-auto: no agent session in this pane" 2>/dev/null; exit 1; }
+t=$(agent_session_transcript "$pane") \
+  || { tts_log "voice-auto: no session for pane $pane"; tmux display-message "voice-auto: no agent session in this pane" 2>/dev/null; exit 1; }
 sid=$(agent_session_id "$t")
 d="${AGENTLABS_SESSIONS:-$HOME/.claude/scratch}/$sid"
 mkdir -p "$d"

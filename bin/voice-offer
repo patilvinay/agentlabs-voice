@@ -35,8 +35,8 @@ fi
 [ -n "$pane" ] || { echo "voice-offer: no pane (pass --pane)" >&2; exit 1; }
 export CC_TTS_PANE="$pane"
 
-[ -n "$t" ] || t=$(agent_pane_transcript "$pane" 2>/dev/null) \
-  || { echo "voice-offer: no agent session in pane $pane" >&2; exit 1; }
+[ -n "$t" ] || t=$(agent_session_transcript "$pane") \
+  || { tts_log "voice-offer: no session for pane $pane"; echo "voice-offer: no agent session in pane $pane" >&2; exit 1; }
 export CC_TTS_TRANSCRIPT="$t"
 sid=$(agent_session_id "$t")
 

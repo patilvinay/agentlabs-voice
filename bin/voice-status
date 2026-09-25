@@ -16,8 +16,8 @@ pane="${1:-${TMUX_PANE:-}}"
 [ -n "$pane" ] || { echo "voice-status: no pane" >&2; exit 1; }
 export CC_TTS_PANE="$pane"
 
-t=$(agent_pane_transcript "$pane" 2>/dev/null) || {
-  tmux display-message "voice-status: no agent session in this pane" 2>/dev/null; exit 1; }
+t=$(agent_session_transcript "$pane") || {
+  tts_log "voice-status: no session for pane $pane"; tmux display-message "voice-status: no agent session in this pane" 2>/dev/null; exit 1; }
 export CC_TTS_TRANSCRIPT="$t"
 
 lib=""
