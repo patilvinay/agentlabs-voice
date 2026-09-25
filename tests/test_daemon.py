@@ -149,16 +149,32 @@ class DaemonPaneTests(unittest.TestCase):
         self.assertEqual(json.loads((self.project / NEW / 'custom-title.json').read_text()),
                          {'customTitle': 'hrms-dev'})
 
+    def test_empty_scaffold_is_replaced_by_parent_folder(self):
+        new = self.transcript(NEW)
+        self.transcript(OLD)
+        self.roster((NEW, OLD))
+        parent = self.claude / 'scratch' / OLD
+        (parent / 'work').mkdir(parents=True)
+        own = self.claude / 'scratch' / NEW
+        for d in ('00-scratch', '10-review', '20-approved'):
+            (own / d).mkdir(parents=True)
+        subprocess.run(['bash', '-c', 'source "$1/lib/agent.sh"; agent_carry_over "$2"',
+                        'test', str(ROOT), str(new)], env=self.env, check=True)
+        self.assertTrue(own.is_symlink())
+        self.assertTrue((own / 'work').is_dir())
+
     def test_carry_over_never_overwrites(self):
         new = self.transcript(NEW)
         self.transcript(OLD)
         self.roster((NEW, OLD))
         (self.claude / 'scratch' / OLD).mkdir(parents=True)
         own = self.claude / 'scratch' / NEW
-        own.mkdir(parents=True)
+        (own / '00-scratch').mkdir(parents=True)
+        (own / '00-scratch' / 'draft.md').write_text('mine')
         subprocess.run(['bash', '-c', 'source "$1/lib/agent.sh"; agent_carry_over "$2"',
                         'test', str(ROOT), str(new)], env=self.env, check=True)
         self.assertFalse(own.is_symlink())
+        self.assertEqual((own / '00-scratch' / 'draft.md').read_text(), 'mine')
 
 
 if __name__ == '__main__':
