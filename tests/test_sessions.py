@@ -183,6 +183,59 @@ class SessionTests(unittest.TestCase):
             env=self.env, text=True, capture_output=True)
         self.assertEqual(result.stdout.strip(), 'Just this summary.')
 
+    def registered_codex(self, opened=()):
+        import sys
+        child = subprocess.Popen([sys.executable, '-c',
+            'import ctypes,sys; ctypes.CDLL(None).prctl(15,b"codex",0,0,0); '
+            'files=[open(p) for p in sys.argv[1:]]; '
+            'print("ready",flush=True); sys.stdin.read()', *map(str, opened)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        self.addCleanup(child.stdout.close)
+        self.addCleanup(child.stdin.close)
+        self.addCleanup(child.wait)
+        self.addCleanup(child.terminate)
+        self.assertEqual(child.stdout.readline().strip(), 'ready')
+        transcript = self.transcript('registered.jsonl', [
+            {'type': 'session_meta', 'payload': {'id': 'registered-session', 'source': 'cli'}}])
+        starttime = Path(f'/proc/{child.pid}/stat').read_text().rsplit(')', 1)[1].split()[19]
+        record = {'pid': child.pid, 'starttime': starttime,
+                  'session_id': 'registered-session', 'transcript': str(transcript)}
+        registration = self.run / f'codex-{child.pid}.json'
+        registration.write_text(json.dumps(record))
+        (self.run / 'pane-3.transcript').write_text(str(self.transcript('stale-claude.jsonl', [])))
+        return child.pid, transcript, registration, record
+
+    def registered_pane(self, pid):
+        return self.shell('fixture_pid="$2"; tmux() { echo "$fixture_pid"; }; '
+                          'agent_pane_transcript "%3"', pid)
+
+    def test_codex_without_open_rollout_uses_process_registration(self):
+        pid, transcript, _, _ = self.registered_codex()
+        result = self.registered_pane(pid)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, str(transcript))
+
+    def test_invalid_codex_registration_never_uses_stale_claude_map(self):
+        pid, transcript, registration, record = self.registered_codex()
+        for field, value in [('pid', pid + 1), ('starttime', '0'),
+                             ('session_id', 'another-session'), ('transcript', '/nonexistent')]:
+            with self.subTest(field=field):
+                registration.write_text(json.dumps({**record, field: value}))
+                self.assertNotEqual(self.registered_pane(pid).returncode, 0)
+        registration.write_text(json.dumps(record))
+        transcript.write_text(json.dumps({'type': 'session_meta', 'payload': {
+            'id': 'registered-session', 'source': {'subagent': 'review'}}}) + '\n')
+        self.assertNotEqual(self.registered_pane(pid).returncode, 0)
+
+    def test_ambiguous_open_codex_rollouts_reject_registration(self):
+        sessions = self.home / 'sessions'
+        sessions.mkdir()
+        paths = [sessions / 'one.jsonl', sessions / 'two.jsonl']
+        for path in paths:
+            path.write_text('{}\n')
+        pid, _, _, _ = self.registered_codex(paths)
+        self.assertNotEqual(self.registered_pane(pid).returncode, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

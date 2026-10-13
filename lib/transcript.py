@@ -75,12 +75,48 @@ def pane_transcript(pid):
                 if len(paths) == 1:
                     print(paths.pop())
                     return 0
+                if not paths:
+                    registered = _registered_codex_transcript(current, proc)
+                    if registered:
+                        print(registered)
+                        return 0
                 return 2  # Found Codex: never fall back to a stale Claude map.
             children = proc / 'task' / str(current) / 'children'
             pending.extend(int(p) for p in children.read_text().split())
         except (OSError, ValueError):
             continue
     return 1
+
+
+def _registered_codex_transcript(pid, proc):
+    """Explicit registration for Codex versions that close idle rollout FDs.
+
+    Bind to a process incarnation, not a pane or reusable PID. Ambiguous open
+    rollouts never reach this fallback. Registration must name a root session.
+    """
+    user_run = Path(f'/run/user/{os.getuid()}')
+    default_run = user_run / 'agentlabs' if user_run.is_dir() else Path(f'/tmp/agentlabs-{os.getuid()}')
+    run = Path(os.environ.get('AGENTLABS_RUN') or default_run)
+    registration = _load_json(run / f'codex-{pid}.json')
+    try:
+        starttime = (proc / 'stat').read_text().rsplit(')', 1)[1].split()[19]
+        if registration.get('pid') != pid or registration.get('starttime') != starttime:
+            return None
+        path = registration.get('transcript')
+        if not isinstance(path, str) or not Path(path).is_absolute():
+            return None
+        with open(path) as stream:
+            first = json.loads(stream.readline())
+        if not isinstance(first, dict) or first.get('type') != 'session_meta':
+            return None
+        payload = first.get('payload')
+        if (not isinstance(payload, dict) or not payload.get('id')
+                or payload.get('id') != registration.get('session_id')
+                or payload.get('source') not in ('cli', 'vscode')):
+            return None
+        return path
+    except (OSError, ValueError, IndexError):
+        return None
 
 
 # --- Claude Code background daemon -----------------------------------------
