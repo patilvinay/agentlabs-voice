@@ -257,6 +257,15 @@ tts_session_auto() {                    # tts_session_auto [transcript]
   if [ -f "$f" ]; then tr -d '[:space:]' < "$f"; else printf '%s' "${CC_TTS_AUTO:-0}"; fi
 }
 
+# Mute is per session too: prefix+M writes this file, and while it exists
+# nothing is spoken or offered for that session on its own -- end of turn,
+# voice-offer, notifications. prefix+v still speaks, because you asked.
+tts_session_muted() {                   # tts_session_muted [transcript]
+  local sid
+  sid=$(tts_session_id "${1:-}" 2>/dev/null) || return 1
+  [ -f "${AGENTLABS_SESSIONS:-$HOME/.claude/scratch}/$sid/.mute" ]
+}
+
 # The end-of-turn pane, shared by the Stop hook and by voice-offer so mid-turn
 # and end-of-turn summaries look and behave identically.
 #

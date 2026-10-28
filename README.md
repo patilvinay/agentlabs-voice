@@ -9,6 +9,7 @@ Nothing speaks or records unless you press a key.
 ```
  prefix v      read the last reply aloud     prefix V   stop talking, drop the queue
  prefix >      skip to the next utterance    prefix A   auto-speak on/off, this session
+ prefix M      mute/unmute this session only
  prefix u      where is it right now?
  prefix p      resume where it stopped       prefix y   pick this session's voice
  prefix Space  dictate, with live text       prefix N   dictate and send

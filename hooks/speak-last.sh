@@ -40,6 +40,7 @@ agent_carry_over "$t"
 [ -n "$t" ] && [ -f "$t" ] || exit 0
 
 sid=$(agent_session_id "$t")
+tts_session_muted "$t" && { tts_log "silent: session ${sid:0:8} muted"; exit 0; }
 state="$cc_tts_run/last-spoken-$sid.uuid"
 prev=$(cat "$state" 2>/dev/null)
 

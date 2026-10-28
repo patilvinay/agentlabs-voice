@@ -16,6 +16,7 @@ and everything agent-specific is confined to `lib/agent.sh`.
 | `v` / `V` | speak the last reply / stop and drop the queue |
 | `>` | skip the utterance being spoken, play the next |
 | `A` | auto-speak on/off, for this session only |
+| `M` | mute/unmute this session only: nothing spoken or offered (`v` still works) |
 | `u` | where is this session right now (read from the transcript) |
 | `p` | resume an interrupted reply, from the sentence it was cut in |
 | `y` | pick this session's voice |
@@ -112,6 +113,7 @@ wrong the moment anything narrates mid-turn.
 | settings | `~/.claude/hooks/tts.conf` (holds the API key; mode 600, gitignored) |
 | this session's voice | `~/.claude/scratch/<session-id>/.voice` |
 | this session's auto-speak | `~/.claude/scratch/<session-id>/.auto` |
+| this session's mute | `~/.claude/scratch/<session-id>/.mute` (`voice-mute [pane] [on\|off]`) |
 | the utterance queue | `/run/user/<uid>/claude-tts-<uid>/queue/` |
 | the live panel | `~/.claude/wave/claude-view.md` |
 | speech runtime + log | `/run/user/<uid>/claude-tts-<uid>/debug.log` |

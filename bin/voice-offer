@@ -39,6 +39,7 @@ export CC_TTS_PANE="$pane"
   || { tts_log "voice-offer: no session for pane $pane"; echo "voice-offer: no agent session in pane $pane" >&2; exit 1; }
 export CC_TTS_TRANSCRIPT="$t"
 sid=$(agent_session_id "$t")
+tts_session_muted "$t" && { tts_log "voice-offer: session ${sid:0:8} muted"; exit 0; }
 
 # Content hash, not message id: one assistant message can be narrated once, and
 # a mid-turn block must not be re-offered when the turn ends and the Stop hook

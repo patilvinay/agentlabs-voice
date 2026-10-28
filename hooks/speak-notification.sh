@@ -14,7 +14,13 @@
 
 CC_TTS_NOTIFY_SKIP="${CC_TTS_NOTIFY_SKIP:-waiting for your input|waiting for input|is idle|idle for}"
 
-raw=$(jq -r '.message // empty')
+input=$(cat)
+raw=$(printf '%s' "$input" | jq -r '.message // empty')
+tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
+if [ -n "$tp" ] && tts_session_muted "$tp"; then
+  tts_log "notification SKIPPED (session muted): ${raw:0:60}"
+  exit 0
+fi
 
 if [ -n "$raw" ] && printf '%s' "$raw" | grep -qiE "$CC_TTS_NOTIFY_SKIP"; then
   tts_log "notification SKIPPED: ${raw:0:60}"
