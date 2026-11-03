@@ -72,6 +72,72 @@ def load_keyterms() -> list[str]:
     return terms[:100]
 
 
+IP_CACHE = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "stt-stream-ip")
+
+
+async def address(host: str) -> str | None:
+    """The address last found for host, at once, refreshed in the background for
+    next time: a lookup through this machine's resolver sometimes stalls 5 s for
+    every caller at once (2026-11-03), so even hedged lookups waited. The first
+    run, or a stale cache, falls back to resolve()."""
+    try:
+        cached = json.load(open(IP_CACHE)).get(host)
+    except (OSError, ValueError):
+        cached = None
+
+    async def refresh() -> str | None:
+        ip = await resolve(host)
+        if ip:
+            try:
+                d = json.load(open(IP_CACHE))
+            except (OSError, ValueError):
+                d = {}
+            d[host] = ip
+            try:
+                with open(IP_CACHE + ".tmp", "w") as fh:
+                    json.dump(d, fh)
+                os.replace(IP_CACHE + ".tmp", IP_CACHE)
+            except OSError:
+                pass
+        return ip
+
+    if cached:
+        asyncio.ensure_future(refresh())
+        return cached
+    return await refresh()
+
+
+async def connect(url: str, headers: dict, host: str, ip: str | None):
+    """Open the socket, hedged: the ~280 ms link to Deepgram sometimes takes 5 s
+    to connect where it usually takes under 1 s, so a second attempt starts at
+    1.5 s and a third at 3 s; the first one open wins, the rest are closed."""
+    extra = {"host": ip, "port": 443, "server_hostname": host} if ip else {}
+
+    async def one():
+        try:
+            return await websockets.connect(url, additional_headers=headers, open_timeout=8, **extra)
+        except TypeError:        # older websockets spells it differently
+            return await websockets.connect(url, extra_headers=headers, open_timeout=8, **extra)
+
+    tries: list[asyncio.Future] = []
+    error: BaseException | None = None
+    for wait in (1.5, 1.5, 8):
+        tries.append(asyncio.ensure_future(one()))
+        deadline = time.monotonic() + wait
+        while tries and time.monotonic() < deadline:
+            done, _ = await asyncio.wait(tries, timeout=deadline - time.monotonic(), return_when=asyncio.FIRST_COMPLETED)
+            for f in done:
+                tries.remove(f)
+                if f.exception():
+                    error = f.exception()
+                    continue
+                for t in tries:      # the losers: close if they open, else cancel
+                    t.add_done_callback(lambda x: x.cancelled() or x.exception() or asyncio.ensure_future(x.result().close()))
+                    t.cancel()
+                return f.result()
+    raise error or asyncio.TimeoutError("could not connect")
+
+
 async def resolve(host: str) -> str | None:
     """The host's IPv4 address, hedged: a lookup through this machine's resolver
     sometimes gets no answer and waits the 5 s timeout (seen 2026-11-03: 5.02 s,
@@ -137,14 +203,10 @@ async def run(args, key: str) -> int:
     async def session() -> None:
         nonlocal interim, ended
         t0 = time.monotonic()
-        ip = await resolve(host)
+        ip = await address(host)
         t1 = time.monotonic()
         # Connect to the address found, still checking the certificate against the name.
-        extra = {"host": ip, "port": 443, "server_hostname": host} if ip else {}
-        try:
-            ws = await websockets.connect(url, additional_headers=headers, open_timeout=6, **extra)
-        except TypeError:        # older websockets spells it differently
-            ws = await websockets.connect(url, extra_headers=headers, open_timeout=6, **extra)
+        ws = await connect(url, headers, host, ip)
         # Kept in the caller's stderr file (stt.err / live.err) for "why was it late".
         print(f"dns {t1 - t0:.2f}s, connected in {time.monotonic() - t0:.2f}s", file=sys.stderr, flush=True)
         finals.clear()
@@ -169,7 +231,14 @@ async def run(args, key: str) -> int:
 
             async def recv() -> None:
                 nonlocal interim
-                async for msg in ws:
+                while True:
+                    # Deepgram answers every second or so, silence included. A socket
+                    # that goes quiet for 8 s has stalled (seen 2026-11-03: send stuck,
+                    # nothing back, no error): raise, and the caller reconnects and replays.
+                    try:
+                        msg = await asyncio.wait_for(ws.recv(), timeout=8)
+                    except websockets.exceptions.ConnectionClosedOK:
+                        return
                     try:
                         data = json.loads(msg)
                     except ValueError:
@@ -177,6 +246,12 @@ async def run(args, key: str) -> int:
                     alts = data.get("channel", {}).get("alternatives") or []
                     if not alts:
                         continue
+                    # How far the transcript trails the mic: seconds recorded so far
+                    # (3200 bytes = 0.1 s) minus the end of the audio this result covers.
+                    # Logged when it passes 2 s, to tell network stalls from Deepgram.
+                    behind = len(heard) * 0.1 - (data.get("start", 0) + data.get("duration", 0))
+                    if behind > 2 and not ended:
+                        print(f"lag {behind:.1f}s at {len(heard) * 0.1:.1f}s", file=sys.stderr, flush=True)
                     text = (alts[0].get("transcript") or "").strip()
                     if not text:
                         continue
@@ -190,6 +265,11 @@ async def run(args, key: str) -> int:
             tasks = [asyncio.ensure_future(send()), asyncio.ensure_future(recv())]
             try:
                 await asyncio.gather(*tasks)
+            except BaseException:
+                # A dead link: drop it now; a polite close would wait 10 s for an
+                # answer that won't come before the reconnect can start.
+                ws.transport.abort()
+                raise
             finally:
                 for t in tasks:
                     t.cancel()
@@ -202,7 +282,7 @@ async def run(args, key: str) -> int:
             await session()
             break
         except (OSError, asyncio.TimeoutError, websockets.exceptions.WebSocketException) as e:
-            print(f"attempt {attempt} failed: {e}", file=sys.stderr, flush=True)
+            print(f"attempt {attempt} failed: {e!r}", file=sys.stderr, flush=True)
             if attempt == 4:
                 raise
 
