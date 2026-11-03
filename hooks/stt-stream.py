@@ -9,7 +9,10 @@ import argparse
 import asyncio
 import json
 import os
+import queue
 import sys
+import threading
+import time
 
 import urllib.parse
 
@@ -88,18 +91,35 @@ async def run(args, key: str) -> int:
         write(args.live, " ".join(finals))
         write(args.live + ".partial", interim)
 
+    # Read the mic from the start, into memory, while the socket connects. The pipe
+    # from arecord holds only ~2 s of audio; a slow connect (a DNS lookup took 10 s)
+    # filled it, arecord stalled, and the first words were lost.
+    audio: queue.Queue = queue.Queue()
+
+    def reader() -> None:
+        while True:
+            chunk = sys.stdin.buffer.read(3200)
+            audio.put(chunk)
+            if not chunk:
+                return
+
+    threading.Thread(target=reader, daemon=True).start()
+
     url = build_url(args.model, args.language, load_keyterms())
     headers = {"Authorization": f"Token {key}"}
+    t0 = time.monotonic()
     try:
         ws = await websockets.connect(url, additional_headers=headers)
     except TypeError:            # older websockets spells it differently
         ws = await websockets.connect(url, extra_headers=headers)
+    # Kept in the caller's stderr file (stt.err / live.err) for "why was it late".
+    print(f"connected in {time.monotonic() - t0:.2f}s", file=sys.stderr, flush=True)
 
     async with ws:
         async def send() -> None:
             loop = asyncio.get_running_loop()
             while True:
-                chunk = await loop.run_in_executor(None, sys.stdin.buffer.read, 3200)
+                chunk = await loop.run_in_executor(None, audio.get)
                 if not chunk:
                     break
                 await ws.send(chunk)
