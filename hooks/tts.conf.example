@@ -40,6 +40,8 @@ CC_STT_MODEL="${CC_STT_MODEL:-base.en}"
 # and paste it here, then prefix Space gives word-by-word live text.
 DEEPGRAM_API_KEY="${DEEPGRAM_API_KEY:-}"
 CC_STT_ONLINE_MODEL="${CC_STT_ONLINE_MODEL:-nova-3}"
+# Deepgram region: api.in.deepgram.com (default, India), api.deepgram.com (global), api.eu.deepgram.com, api.au.deepgram.com
+CC_STT_HOST="${CC_STT_HOST:-api.in.deepgram.com}"
 
 # Dialect. Asking for the wrong one costs real accuracy, and a US default is
 # the wrong one for most of the world. nova-3 accepts:

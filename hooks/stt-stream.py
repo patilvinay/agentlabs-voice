@@ -18,8 +18,12 @@ import urllib.parse
 
 import websockets
 
+# Deepgram's India region (api.in.deepgram.com): from Bengaluru the transcript kept
+# pace with speech (median lag 0.0 s) where the global US host trailed 3-6 s on a
+# bad link (2026-11-03). No fallback: if the region is down, requests fail.
+# CC_STT_HOST picks another: api.deepgram.com (global), api.eu..., api.au....
 BASE = (
-    "wss://api.deepgram.com/v1/listen"
+    f"wss://{os.environ.get('CC_STT_HOST', 'api.in.deepgram.com')}/v1/listen"
     "?punctuate=true&smart_format=true&interim_results=true"
     "&encoding=linear16&sample_rate=16000&channels=1"
 )
@@ -208,7 +212,7 @@ async def run(args, key: str) -> int:
         # Connect to the address found, still checking the certificate against the name.
         ws = await connect(url, headers, host, ip)
         # Kept in the caller's stderr file (stt.err / live.err) for "why was it late".
-        print(f"dns {t1 - t0:.2f}s, connected in {time.monotonic() - t0:.2f}s", file=sys.stderr, flush=True)
+        print(f"{host} {args.language} keyterms={len(load_keyterms())}: dns {t1 - t0:.2f}s, connected in {time.monotonic() - t0:.2f}s", file=sys.stderr, flush=True)
         finals.clear()
         interim = ""
 

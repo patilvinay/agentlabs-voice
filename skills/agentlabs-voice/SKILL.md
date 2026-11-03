@@ -106,6 +106,19 @@ wrong the moment anything narrates mid-turn.
 - `tts_cancel` alone is a SKIP: the drainer sees its player die and takes the
   next entry. `tts_stop_all` sets the stop flag and clears the queue
 
+## Engines and what they cost
+
+Checked 2026-11-02 against `tts.conf` and `debug.log`.
+
+| job | engine | cost |
+|-----|--------|------|
+| speech out (`v`, auto, offer) | Microsoft Edge read-aloud voices via `edge-tts` (`CC_TTS_ENGINE=edge`, default voice `en-US-AvaMultilingualNeural`) | free: no key, no account. It is an unofficial endpoint, so it can break or be rate-limited without notice |
+| speech out, fallback | speech-dispatcher (`spd`), local | free |
+| live dictation (`Space`/`n`/`N`, Herdr's dictate mod) | Deepgram streaming, India region `api.in.deepgram.com` (`CC_STT_HOST`), `nova-3`, `en-IN`, keyterms from `CC_STT_KEYTERM_FILE` (`stt-stream.py`; `stt.err`/`live.err` log host, connect time and any lag over 2 s) | paid, pay-as-you-go: about $0.0077/min monolingual streaming plus about $0.0013/min for keyterm prompting, so about $0.54 per hour of open microphone. New accounts get $200 free credit. These figures come from third-party price lists; confirm on deepgram.com/pricing |
+| offline dictation (`m`/`e`) | faster-whisper `base.en`, CPU int8 (`stt.py`) | free, local |
+
+Billing is per second of audio streamed while the dictation pane is open, not per word. Usage and balance are on console.deepgram.com. The usage API refused the key in `tts.conf` with `UNAUTHORIZED` (2026-11-02), probably because the key can only transcribe, so check usage in the console.
+
 ## Where state lives
 
 | what | where |

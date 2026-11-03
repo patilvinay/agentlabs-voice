@@ -67,7 +67,8 @@ if [ -z "${DEEPGRAM_API_KEY:-}${CC_STT_KEY:-}" ]; then
   msg "no DEEPGRAM_API_KEY - add it to ~/.claude/hooks/tts.conf"
   exit 1
 fi
-export DEEPGRAM_API_KEY CC_STT_KEY
+# The STT settings from tts.conf are plain variables: the client only sees exported ones.
+export DEEPGRAM_API_KEY CC_STT_KEY CC_STT_LANG CC_STT_ONLINE_MODEL CC_STT_KEYTERM_FILE CC_STT_HOST
 printf '%s' "$pane" > "$panef"; printf '%s' "$enter" > "$modef"
 : > "$live"; : > "$final"
 rm -f "$fifo"; mkfifo "$fifo"
